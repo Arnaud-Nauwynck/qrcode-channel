@@ -26,7 +26,7 @@ public class QRCodesDecoderChannel {
 	
 	private String readyText = "";
 	
-	private int channelSequenceNumber = 0;
+	private int nextSequenceNumber = 0;
 	
 	private Map<String,QRCodeDecodedFragment> aheadFragments = new LinkedHashMap<>();
 	
@@ -81,12 +81,12 @@ public class QRCodesDecoderChannel {
     	String headerAndData = qrResult.getText();
     	handleFragmentHeaderAndData(res, headerAndData);
     
-    	res.channelSequenceNumber = channelSequenceNumber;
+    	res.channelSequenceNumber = nextSequenceNumber;
         return res;
 	}
 
     
-    private static final Pattern fragmentHeaderPattern = Pattern.compile("([0-9\\.]*) ([0-9]+)([^\n]*)");
+    private static final Pattern fragmentHeaderPattern = Pattern.compile("([0-9\\.]*) ([0-9]+) ([^\n]*)");
     
     protected void handleFragmentHeaderAndData(SnapshotFragmentResult res, String headerAndData) {
     	int lineSep = headerAndData.indexOf("\n");
@@ -104,7 +104,7 @@ public class QRCodesDecoderChannel {
     	String fragId = headerMatcher.group(1);
     	int fragSeqNumber = Integer.parseInt(fragId); // TODO... handle case id!=number : "id.subPart"
     	
-    	if (fragSeqNumber <= channelSequenceNumber) {
+    	if (fragSeqNumber < nextSequenceNumber) {
 			// drop already seen/handled fragment .. do nothing!
 			res.decodeMsg = "dropped past fragment (" + fragId + ")";
 			return;
@@ -117,27 +117,39 @@ public class QRCodesDecoderChannel {
     		return;
     	}
     	
+    	String headerArgs = headerMatcher.group(3);
+    	if (headerArgs != null && headerArgs.startsWith("SHA=")) {
+    		int endShaIdx = headerArgs.indexOf(" ");
+    		if (endShaIdx == -1) endShaIdx = headerArgs.length(); 
+    		String sha256 = headerArgs.substring(4, endShaIdx);
+	    	String checkSha256 = QRCodecChannelUtils.sha256(data);
+	    	if (! checkSha256.equals(sha256)) {
+	    		res.decodeMsg = "corrupted data: SHA-256 differs for fragId:" + fragId;
+	    		return;
+	    	}
+    	}
+    	
     	// ok, got id + data...
 		res.fragmentId = fragId;
 		res.fragmentSequenceNumber = fragSeqNumber;
 		res.text = data;
     	
 		// check if fragment is next one expected in sequence
-		if (channelSequenceNumber+1 == fragSeqNumber) {
+		if (nextSequenceNumber == fragSeqNumber) {
 			readyText += data;
-			channelSequenceNumber++;
 			res.decodeMsg = "OK recognised fragment (" + fragSeqNumber + ")";
+			nextSequenceNumber++;
 			
 			// then check ahead fragments
-			int seqNumberBeforeUsedAheadFrags = channelSequenceNumber;
+			int seqNumberBeforeUsedAheadFrags = nextSequenceNumber;
 			for(;;) {
 				boolean foundNextFrag = false;
 				for(Iterator<QRCodeDecodedFragment> nextFragIter = aheadFragments.values().iterator(); nextFragIter.hasNext(); ) {
 					QRCodeDecodedFragment nextFrag = nextFragIter.next();
 					int nextFragNumber = nextFrag.getFragmentNumber();
-					if (nextFragNumber == channelSequenceNumber) {
+					if (nextFragNumber == nextSequenceNumber) {
 						readyText += nextFrag.getData();
-						channelSequenceNumber++;
+						nextSequenceNumber++;
 						
 						foundNextFrag = true;
 						nextFragIter.remove();
@@ -147,8 +159,8 @@ public class QRCodesDecoderChannel {
 					break;
 				}
 			}
-			if (channelSequenceNumber > seqNumberBeforeUsedAheadFrags) {
-				res.decodeMsg += ", then use ahead frag(s) up to " + channelSequenceNumber; 
+			if (nextSequenceNumber > seqNumberBeforeUsedAheadFrags) {
+				res.decodeMsg += ", then use ahead frag(s), expecting " + nextSequenceNumber; 
 			}
 			
 		} else {
@@ -166,7 +178,7 @@ public class QRCodesDecoderChannel {
     // ------------------------------------------------------------------------
     
 	public int getChannelSequenceNumber() {
-		return channelSequenceNumber;
+		return nextSequenceNumber;
 	}
 
 	public String getReadyText() {

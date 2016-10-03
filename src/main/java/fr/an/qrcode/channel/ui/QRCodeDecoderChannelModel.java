@@ -15,6 +15,9 @@ import java.util.zip.CRC32;
 import javax.swing.SwingUtilities;
 import javax.swing.event.SwingPropertyChangeSupport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.SnapshotFragmentResult;
 import fr.an.qrcode.channel.ui.utils.DesktopScreenSnaphotProvider;
@@ -25,7 +28,10 @@ import fr.an.qrcode.channel.ui.utils.DesktopScreenSnaphotProvider;
  * take screenshot of rectangular record area, decode QRCode, concatenate text result
  */
 public class QRCodeDecoderChannelModel {
-    
+
+	
+	private static final Logger LOG = LoggerFactory.getLogger(QRCodeDecoderChannelModel.class);
+	
     private SwingPropertyChangeSupport pcs = new SwingPropertyChangeSupport(this);
 
     private DesktopScreenSnaphotProvider screenSnaphostProvider = new DesktopScreenSnaphotProvider(false, true);
@@ -55,6 +61,7 @@ public class QRCodeDecoderChannelModel {
     // ------------------------------------------------------------------------
 
     public void reset() {
+    	stopListenSnapshots();
     	this.decoderChannel = new QRCodesDecoderChannel();
     	this.currentScreenshotImg = null;
     	this.currentScreenshotImgCrc32 = 0;
@@ -126,22 +133,26 @@ public class QRCodeDecoderChannelModel {
     
     private void listenSnapshotLoop() {
     	listenSnapshotsRunning.set(true);
-    	for(;;) {
-	    	if (stopListenSnapshotsRequested.get()) {
-	    		break;
+    	try {
+	    	for(;;) {
+		    	if (stopListenSnapshotsRequested.get()) {
+		    		break;
+		    	}
+		    	long timeBefore = System.currentTimeMillis();
+		    	
+		    	doCaptureAndHandleSnapshot();
+		    	
+	    		long timeAfter = System.currentTimeMillis();
+	    		long actualSleepMillis = (timeBefore + sleepMillis) - timeAfter;
+	    		if (actualSleepMillis > 0) { 
+			    	try {
+						Thread.sleep(actualSleepMillis);
+					} catch (InterruptedException e) {
+					}
+	    		}
 	    	}
-	    	long timeBefore = System.currentTimeMillis();
-	    	
-	    	doCaptureAndHandleSnapshot();
-	    	
-    		long timeAfter = System.currentTimeMillis();
-    		long actualSleepMillis = (timeBefore + sleepMillis) - timeAfter;
-    		if (actualSleepMillis > 0) { 
-		    	try {
-					Thread.sleep(actualSleepMillis);
-				} catch (InterruptedException e) {
-				}
-    		}
+    	} catch(Exception ex) {
+    		LOG.error("Failed");
     	}
 		listenSnapshotsRunning.set(false);
     }

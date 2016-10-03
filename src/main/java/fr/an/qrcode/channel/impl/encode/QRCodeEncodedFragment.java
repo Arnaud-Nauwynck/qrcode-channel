@@ -13,7 +13,8 @@ public class QRCodeEncodedFragment {
     private final String data;
     
     private WeakReference<BufferedImage> imgRef;
-    
+	private boolean acknowledge;
+
     public QRCodeEncodedFragment(QRCodesEncoderChannel owner, int fragmentNumber, String fragmentId, String fragmentHeaderText, String data) {
         this.owner = owner;
         this.fragmentNumber = fragmentNumber;
@@ -46,7 +47,14 @@ public class QRCodeEncodedFragment {
 
 	public FragmentImg getFragmentImg() {
 		BufferedImage img = getImg();
-		return new FragmentImg(fragmentNumber, fragmentId, img);
+		return new FragmentImg(this, img);
 	}
     
+	public void acknowledge() {
+		this.acknowledge = true;
+	}
+	public boolean isAcknowledge() {
+		return this.acknowledge;
+	}
+	
 }

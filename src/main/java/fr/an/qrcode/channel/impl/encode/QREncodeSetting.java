@@ -11,7 +11,7 @@ public class QREncodeSetting {
 
     private BarcodeFormat qrCodeFormat = BarcodeFormat.QR_CODE;
     private int qrVersion = 40;
-    private ErrorCorrectionLevel errorCorrectionLevel = ErrorCorrectionLevel.L;
+    private ErrorCorrectionLevel errorCorrectionLevel = ErrorCorrectionLevel.H;
 
     private Map<EncodeHintType, Object> qrHints;
     

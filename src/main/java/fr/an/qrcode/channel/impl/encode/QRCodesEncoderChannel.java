@@ -10,7 +10,6 @@ import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
-import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.google.zxing.qrcode.decoder.Version;
 
 import fr.an.qrcode.channel.impl.QRCodeUtils;
@@ -18,10 +17,11 @@ import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
 
 public class QRCodesEncoderChannel {
 
-	private static int ESTIM_HEADER_LEN = 25;
+	private static int ESTIM_HEADER_LEN = 50;
 	
 	private QREncodeSetting qrEncodeSettings;
-
+	private boolean encodeSha256Fragments = true;
+	
 	private int fragmentSequenceNumber = 0; // (sequence number generator)
 
 	private Map<String,QRCodeEncodedFragment> fragments = new LinkedHashMap<>();
@@ -40,7 +40,7 @@ public class QRCodesEncoderChannel {
 	
 	public void appendFragmentsFor(String textContent) {
 		Version qrVersion = Version.getVersionForNumber(qrEncodeSettings.getQrVersion());
-		int maxBits = QRCodeUtils.qrCodeBitsCapacity(qrVersion, ErrorCorrectionLevel.M);
+		int maxBits = QRCodeUtils.qrCodeBitsCapacity(qrVersion, qrEncodeSettings.getErrorCorrectionLevel());
 		int maxChars = maxBits/8 - ESTIM_HEADER_LEN;
 		// split text in "raw" text fragment
 		List<String> splitTexts = new ArrayList<>();
@@ -53,14 +53,21 @@ public class QRCodesEncoderChannel {
 			if (len == remainTextLength) {
 				break;
 			}
-			remainText= remainText.substring(len+1, remainTextLength);
+			remainText= remainText.substring(len, remainTextLength);
 		}
 		// build Fragment from split text
 		for(String splitText: splitTexts) {
-			int fragSeqNumber = ++fragmentSequenceNumber;
-			long crc32 = QRCodecChannelUtils.crc32(splitText);
+			int fragSeqNumber = fragmentSequenceNumber++;
 			String fragId = Integer.toString(fragSeqNumber);
-			String header = fragId + " " + crc32 + "\n";
+			long crc32 = QRCodecChannelUtils.crc32(splitText);
+
+			String header = fragId + " " + crc32;
+			if (encodeSha256Fragments) {
+				String checkSha256 = QRCodecChannelUtils.sha256(splitText);
+				header += " SHA=" + checkSha256; 
+	    	}
+	    	
+			header += "\n";
 			QRCodeEncodedFragment frag = new QRCodeEncodedFragment(this, fragSeqNumber, fragId, header, splitText);
 			fragments.put(fragId, frag);
 		}

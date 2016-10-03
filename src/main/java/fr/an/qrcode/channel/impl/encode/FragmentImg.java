@@ -2,27 +2,36 @@ package fr.an.qrcode.channel.impl.encode;
 
 import java.awt.image.BufferedImage;
 
+/**
+ * wrapper of QRCodeEncodedFragment, to hold the computed BufferedImage reference (not with WeakReference)
+ */
 public class FragmentImg {
-	public final int fragmentNumber;
-	public final String fragmentId;
-	// public final String fragmentHeader;
+	public final QRCodeEncodedFragment owner;
 	public BufferedImage img;
-	public boolean acknowledge = false;
 	
-	public FragmentImg(int fragmentNumber, String fragmentId, BufferedImage img) {
-		this.fragmentNumber = fragmentNumber;
-		this.fragmentId = fragmentId;
+	public FragmentImg(QRCodeEncodedFragment owner, BufferedImage img) {
+		this.owner = owner;
 		this.img = img;
 	}
 
+	public String getFragmentId() {
+		return owner.getFragmentId();
+	}
+
+	public int getFragmentNumber() {
+		return owner.getFragmentNumber();
+	}
+
 	public boolean isAcknowledge() {
-		return acknowledge;
+		return owner.isAcknowledge();
 	}
 
 	public void acknowledge() {
-		this.acknowledge = true;
+		this.owner.acknowledge();
 		this.img = null;
 	}
+
+
 	
 	
 }

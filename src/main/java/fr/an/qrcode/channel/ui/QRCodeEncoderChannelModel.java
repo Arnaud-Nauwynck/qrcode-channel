@@ -38,7 +38,7 @@ public class QRCodeEncoderChannelModel {
     private ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
     protected AtomicBoolean displayLoopRunning = new AtomicBoolean(false);
     protected AtomicBoolean displayLoopStopRequested = new AtomicBoolean(false);
-	protected long millisBetweenImg = 400;
+	protected long millisBetweenImg = 120;
 	protected boolean hideFragmentAfterPlay = true;
 	
 	// computed imgs
@@ -114,7 +114,14 @@ public class QRCodeEncoderChannelModel {
     		// should click "compute" before!
     	}
     	if (fragmentImgs != null && currDisplayIndex+1 < fragmentImgs.size()) {
-    		setCurrentDisplayFragment(fragmentImgs.get(++currDisplayIndex));
+    		while(currDisplayIndex+1 < fragmentImgs.size()) {
+    			FragmentImg fragImg = fragmentImgs.get(++currDisplayIndex);
+	    		if (fragImg.isAcknowledge()) {
+					continue;
+				}
+    			setCurrentDisplayFragment(fragImg);
+	    		break;
+    		}
     	}
     }
 
@@ -125,7 +132,14 @@ public class QRCodeEncoderChannelModel {
 
     public void onDisplayPrevFrag() {
     	if (fragmentImgs != null && currDisplayIndex-1 >= 0) {
-    		setCurrentDisplayFragment(fragmentImgs.get(--currDisplayIndex));
+			while(currDisplayIndex > 0) {
+				FragmentImg fragImg = fragmentImgs.get(--currDisplayIndex);
+	    		if (fragImg.isAcknowledge()) {
+					continue;
+				}
+	    		setCurrentDisplayFragment(fragImg);
+	    		break;
+			}
     	}
     }
 
@@ -151,12 +165,14 @@ public class QRCodeEncoderChannelModel {
 				LOG.error("");
 			}
 		}
+		pcs.firePropertyChange("fragmentImgs", null, fragmentImgs);
 	}
 	
     private void addAcknowledgeFrag(int fragNum) {
     	for(FragmentImg frag : fragmentImgs) {
-    		if (frag.fragmentNumber == fragNum) {
+    		if (frag.getFragmentNumber() == fragNum && !frag.isAcknowledge()) {
     			frag.acknowledge();
+    			break;
     		}
     	}
 	}
@@ -195,15 +211,18 @@ public class QRCodeEncoderChannelModel {
 	public void setCurrentDisplayFragment(FragmentImg p) {
 		FragmentImg old = currentDisplayFragment; 
 		this.currentDisplayFragment = p;
+		if (p != null) {
+			currDisplayIndex = p.getFragmentNumber();
+		}
 		pcs.firePropertyChange("currentDisplayFragment", old, currentDisplayFragment);
 	}
 
 	public int getCurrentDisplayFragmentNumber() {
-		return currentDisplayFragment != null? currentDisplayFragment.fragmentNumber : 0;
+		return currentDisplayFragment != null? currentDisplayFragment.getFragmentNumber() : 0;
 	}
 
 	public String getCurrentDisplayFragmentId() {
-		return currentDisplayFragment != null? currentDisplayFragment.fragmentId : "";
+		return currentDisplayFragment != null? currentDisplayFragment.getFragmentId() : "";
 	}
 
 	public BufferedImage getCurrentFragmentImg() {
@@ -217,8 +236,8 @@ public class QRCodeEncoderChannelModel {
         	for(FragmentImg frag : fragmentImgs) {
         		if (! frag.isAcknowledge()) {
         			countNoAck++;
-        			minNoAck = Math.min(minNoAck, frag.fragmentNumber);
-        			maxNoAck = Math.max(maxNoAck, frag.fragmentNumber);
+        			minNoAck = Math.min(minNoAck, frag.getFragmentNumber());
+        			maxNoAck = Math.max(maxNoAck, frag.getFragmentNumber());
         		}
         	}
         	if (countNoAck == 1) {

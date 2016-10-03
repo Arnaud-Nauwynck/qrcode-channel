@@ -9,6 +9,7 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.File;
 
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -18,6 +19,9 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
+import javax.swing.SwingWorker;
+
+import org.apache.commons.io.FileUtils;
 
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.SnapshotFragmentResult;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
@@ -46,7 +50,9 @@ public class QRCodeDecoderChannelView {
     private JButton stopLoopQRCodeButton;
     private JButton clearTextButton;
     private JButton updateTextButton;
-    
+    private JTextField fileNameField;
+    private JButton saveFileButton;
+
     private JScrollPane outputTextScrollPane;
     private JTextArea outputTextArea;
 
@@ -58,7 +64,7 @@ public class QRCodeDecoderChannelView {
     private JLabel currentDecodeTimeMillisLabel;
     private JLabel currentChannelSequenceNumberLabel;
     private JTextArea currentAheadFragsInfoArea;
-    
+    private JLabel saveFileMessageLabel;
 
     // ------------------------------------------------------------------------
 
@@ -116,9 +122,16 @@ public class QRCodeDecoderChannelView {
             clearTextButton.addActionListener(e -> onClearTextAction());
 
             updateTextButton = new JButton("Update");
-            recorderToolbar.add(updateTextButton);
             updateTextButton.addActionListener(e -> onSetTextAction());
+            recorderToolbar.add(updateTextButton);
 
+            fileNameField = new JTextField();
+            recorderToolbar.add(fileNameField);
+
+            saveFileButton = new JButton("Save");
+            saveFileButton.addActionListener(e -> onSaveFileAction());
+            recorderToolbar.add(saveFileButton);
+            
             outputTextArea = new JTextArea();
             outputTextScrollPane = new JScrollPane(outputTextArea);
             recorderTabPanel.add(outputTextScrollPane, BorderLayout.CENTER);
@@ -146,6 +159,8 @@ public class QRCodeDecoderChannelView {
 	        infoPanel.add(currentChannelSequenceNumberLabel);
 	        currentAheadFragsInfoArea = new JTextArea(1, 50);
 	        infoPanel.add(currentAheadFragsInfoArea);
+	        saveFileMessageLabel = new JLabel();
+	        infoPanel.add(saveFileMessageLabel);
         }
         mainComponent.add(infoPanel, BorderLayout.SOUTH);
         
@@ -168,6 +183,35 @@ public class QRCodeDecoderChannelView {
     private void onClearTextAction() {
         model.setFullText("");
         outputTextArea.setText("");
+    }
+    
+    public void onSaveFileAction() {
+    	String fileName = fileNameField.getText();
+    	if (fileName == null) {
+    		fileName = "output.txt";
+    		fileNameField.setText(fileName);
+    	}
+    	final File outputFile = new File(fileName);
+    	final String content = model.getFullText();
+    	new SwingWorker<String,Void>() {
+			@Override
+			protected String doInBackground() throws Exception {
+				try {
+					FileUtils.write(outputFile, content);
+					return "done write file";
+				} catch(Exception ex) {
+					return "Failed to write file : " + ex.getMessage();
+				}
+			}
+			@Override
+			public void done() {
+				try {
+					String msg = get();
+					saveFileMessageLabel.setText(msg);
+				} catch (Exception e) {
+				}
+			}
+    	}.execute();
     }
     
     protected TransparentFrameScreenArea recordAreaFrame;
@@ -235,6 +279,8 @@ public class QRCodeDecoderChannelView {
         
         qrCodeImageCanvas.setImage(model.getCurrentScreenshotImg());
         qrCodeImageCanvas.repaint();
+        
+        // saveFileMessageLabel.setText();
     }
 
 }

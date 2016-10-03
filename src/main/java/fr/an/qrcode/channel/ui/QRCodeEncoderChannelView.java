@@ -7,6 +7,8 @@ import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.File;
+import java.io.IOException;
 
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -17,6 +19,8 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
+
+import org.apache.commons.io.FileUtils;
 
 import fr.an.qrcode.channel.impl.encode.FragmentImg;
 import fr.an.qrcode.channel.impl.encode.QREncodeSetting;
@@ -36,7 +40,8 @@ public class QRCodeEncoderChannelView {
     
     private JPanel inputTabPanel;
     private JToolBar inputToolbar;
-    private JTextField imageSizeField;
+    private JTextField inputFilenameField;
+//    private JTextField imageSizeField;
     private JButton computeQRCodeButton;
     private JScrollPane inputTextScrollPane;
     private JTextArea inputTextArea;
@@ -82,8 +87,18 @@ public class QRCodeEncoderChannelView {
             inputToolbar = new JToolBar();
             inputTabPanel.add(inputToolbar, BorderLayout.NORTH);
             
-            imageSizeField = new JTextField();
-            inputToolbar.add(imageSizeField);
+            inputFilenameField = new JTextField();
+            inputFilenameField.addKeyListener(new KeyAdapter() {
+            	public void keyPressed(KeyEvent event) {
+            		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
+            			onInputFilenameEntered();
+            		}
+            	}
+            });
+            inputToolbar.add(inputFilenameField);
+            
+//            imageSizeField = new JTextField();
+//            inputToolbar.add(imageSizeField);
             
             computeQRCodeButton = new JButton("compute QRCode(s)");
             inputToolbar.add(computeQRCodeButton);
@@ -162,13 +177,38 @@ public class QRCodeEncoderChannelView {
         model2view();
     }
 
+    public void onInputFilenameEntered() {
+    	String inputFilename = inputFilenameField.getText();
+    	if (inputFilename == null || inputFilename.isEmpty()) {
+    		inputFilename = "input.txt";
+    		inputFilenameField.setText(inputFilename);
+    	}
+    	File file = new File(inputFilename);
+    	if (!file.exists()) {
+    		return;
+    	}
+    	if (!file.canRead()) {
+    		return;
+    	}
+    	String inputTextContent;
+		try {
+			inputTextContent = FileUtils.readFileToString(file);
+		} catch (IOException e) {
+			return;
+		}
+    	inputTextArea.setText(inputTextContent);
+    	// inputTextArea.setEditable(false);
+    	onComputeQRCodesAction();
+    }
+    
     private void onComputeQRCodesAction() {
 //        String[] qrCodeDimText = imageSizeField.getText().split(",");
 //        int w = Integer.parseInt(qrCodeDimText[0]);
 //        int h = Integer.parseInt(qrCodeDimText[1]);
-        String text = inputTextArea.getText();
+    	
+    	String inputTextContent = inputTextArea.getText();
         
-        model.computeQRCodes(text);
+        model.computeQRCodes(inputTextContent);
         
         // model.setCurrentQRCodeFragmentIndex(0);
         
@@ -181,7 +221,7 @@ public class QRCodeEncoderChannelView {
         // imageSizeField.setText(model.getQrCodeW() + "," + model.getQrCodeH());
     	
     	FragmentImg fragImg = model.getCurrentDisplayFragment();
-        String fragId = fragImg != null? fragImg.fragmentId : "";
+        String fragId = fragImg != null? fragImg.getFragmentId() : "";
         qrCodeNumberField.setText(fragId);
         
         int fragmentsSeqNumber = model.getChannelSequenceNumber();
