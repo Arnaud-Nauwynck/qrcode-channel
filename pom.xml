@@ -11,7 +11,8 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<zxing.version>3.3.0</zxing.version>
+		<zxind.version>3.3.3</zxind.version>
+		<sarxos.version>0.3.12</sarxos.version>
 	</properties>
 
 
@@ -52,25 +53,25 @@
 		<dependency>
 			<groupId>com.google.zxing</groupId>
 			<artifactId>core</artifactId>
-			<version>${zxing.version}</version>
+			<version>${zxind.version}</version>
+		</dependency>
+
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>${zxind.version}</version>
+        </dependency>
+
+		<dependency>
+		  <groupId>com.github.sarxos</groupId>
+		  <artifactId>webcam-capture</artifactId>
+		  <version>${sarxos.version}</version>
 		</dependency>
 
 		<dependency>
-			<groupId>com.google.zxing</groupId>
-			<artifactId>javase</artifactId>
-			<version>${zxing.version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.didihe1988.hadoop</groupId>
-			<artifactId>rscode</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
-		</dependency>
-
-		<dependency>
-		    <groupId>commons-codec</groupId>
-		    <artifactId>commons-codec</artifactId>
-		    <version>20041127.091804</version>
+		    <groupId>com.github.sarxos</groupId>
+		    <artifactId>webcam-capture-driver-openimaj</artifactId>
+		    <version>${sarxos.version}</version>
 		</dependency>
 
 		<dependency>

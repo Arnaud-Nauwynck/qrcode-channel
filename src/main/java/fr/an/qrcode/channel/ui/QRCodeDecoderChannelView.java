@@ -11,9 +11,11 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
@@ -22,6 +24,8 @@ import javax.swing.JToolBar;
 import javax.swing.SwingWorker;
 
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.SnapshotFragmentResult;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
@@ -32,7 +36,9 @@ import fr.an.qrcode.channel.ui.utils.TransparentFrameScreenArea;
  * 
  */
 public class QRCodeDecoderChannelView {
-    
+
+	private static Logger LOG = LoggerFactory.getLogger(QRCodeDecoderChannelView.class);
+	
     private QRCodeDecoderChannelModel model = new QRCodeDecoderChannelModel();
     
     private PropertyChangeListener listener = (evt) -> onModelPropChangeEvent(evt);
@@ -43,7 +49,17 @@ public class QRCodeDecoderChannelView {
     private JPanel recorderTabPanel;
     private JToolBar recorderToolbar;
     private JTextField recordAreaField;
+    private ButtonGroup sourceButtonGroup;
+    private JRadioButton sourceScreenshotRadioButton;
+    private JRadioButton sourceWebcamRadioButton;
+
+    // for webcam recording
+    private JPanel webcamParamsPanel;
+    
+    // for screenshot recording
+    private JPanel screenshotParamsPanel;
     private JButton revealRecordAreaButton;
+    
     private JButton resetButton;
     private JButton nextQRCodeButton;
     private JButton loopQRCodeButton;
@@ -113,6 +129,27 @@ public class QRCodeDecoderChannelView {
             recordAreaField = new JTextField();
             recorderToolbar.add(recordAreaField);
             
+            sourceScreenshotRadioButton = new JRadioButton("screen");
+            recorderToolbar.add(sourceScreenshotRadioButton);
+            sourceScreenshotRadioButton.setSelected(true);
+            sourceScreenshotRadioButton.addActionListener(e -> onSourceScreenshotChosen());
+
+            sourceWebcamRadioButton = new JRadioButton("webcam");
+            recorderToolbar.add(sourceWebcamRadioButton);
+            sourceWebcamRadioButton.addActionListener(e -> onSourceWebcamChosen());
+            
+            sourceButtonGroup = new ButtonGroup();
+            sourceButtonGroup.add(sourceScreenshotRadioButton);
+            sourceButtonGroup.add(sourceWebcamRadioButton);
+            {
+            	webcamParamsPanel = new JPanel();
+            	recorderToolbar.add(webcamParamsPanel);
+            }
+            {
+            	screenshotParamsPanel = new JPanel();
+            	recorderToolbar.add(screenshotParamsPanel);
+            }
+
             revealRecordAreaButton = new JButton("reveal area");
             revealRecordAreaButton.addActionListener(e -> onRevealRecordAreaAction());
             recorderToolbar.add(revealRecordAreaButton);
@@ -167,7 +204,15 @@ public class QRCodeDecoderChannelView {
         model2view();
     }
 
-    private void onModelPropChangeEvent(PropertyChangeEvent evt) {
+    private void onSourceWebcamChosen() {
+    	model.setSourceWebcam();
+    }
+
+    private void onSourceScreenshotChosen() {
+    	model.setSourceScreenshot();
+    }
+
+	private void onModelPropChangeEvent(PropertyChangeEvent evt) {
 		model2view();
 	}
 
@@ -250,12 +295,8 @@ public class QRCodeDecoderChannelView {
     
     
     private void recordArea_viewToModel() {
-        String[] coordTexts = recordAreaField.getText().split(",");
-        int x = Integer.parseInt(coordTexts[0]);
-        int y = Integer.parseInt(coordTexts[1]);
-        int w = Integer.parseInt(coordTexts[2]);
-        int h = Integer.parseInt(coordTexts[3]);
-        model.setRecordArea(new Rectangle(x, y, w, h));
+        String recordParamsText = recordAreaField.getText();
+        model.parseRecordParamsText(recordParamsText);
     }
 
     private void recordArea_modelToView() {
@@ -279,6 +320,7 @@ public class QRCodeDecoderChannelView {
         
         qrCodeImageCanvas.setImage(model.getCurrentScreenshotImg());
         qrCodeImageCanvas.repaint();
+        // LOG.debug("repaint img");
         
         // saveFileMessageLabel.setText();
     }

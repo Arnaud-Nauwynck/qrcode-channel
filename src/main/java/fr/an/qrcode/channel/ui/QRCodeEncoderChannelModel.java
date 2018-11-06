@@ -38,7 +38,7 @@ public class QRCodeEncoderChannelModel {
     private ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
     protected AtomicBoolean displayLoopRunning = new AtomicBoolean(false);
     protected AtomicBoolean displayLoopStopRequested = new AtomicBoolean(false);
-	protected long millisBetweenImg = 120;
+	protected long millisBetweenImg = 200;
 	protected boolean hideFragmentAfterPlay = true;
 	
 	// computed imgs
@@ -60,7 +60,7 @@ public class QRCodeEncoderChannelModel {
     	// compute..
     	this.fragmentImgs = encoderChannel.getFragmentImgs();
 
-    	FragmentImg frag0 = null;// !fragmentImgs.isEmpty()? fragmentImgs.get(0) : null; 
+    	FragmentImg frag0 = !fragmentImgs.isEmpty()? fragmentImgs.get(0) : null; 
     	setCurrentDisplayFragment(frag0);
     	
     	pcs.firePropertyChange("text", null, text);
@@ -219,10 +219,6 @@ public class QRCodeEncoderChannelModel {
 
 	public int getCurrentDisplayFragmentNumber() {
 		return currentDisplayFragment != null? currentDisplayFragment.getFragmentNumber() : 0;
-	}
-
-	public String getCurrentDisplayFragmentId() {
-		return currentDisplayFragment != null? currentDisplayFragment.getFragmentId() : "";
 	}
 
 	public BufferedImage getCurrentFragmentImg() {

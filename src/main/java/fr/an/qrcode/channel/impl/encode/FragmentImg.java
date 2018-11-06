@@ -14,10 +14,6 @@ public class FragmentImg {
 		this.img = img;
 	}
 
-	public String getFragmentId() {
-		return owner.getFragmentId();
-	}
-
 	public int getFragmentNumber() {
 		return owner.getFragmentNumber();
 	}

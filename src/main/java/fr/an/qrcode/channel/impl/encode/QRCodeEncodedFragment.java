@@ -7,7 +7,6 @@ public class QRCodeEncodedFragment {
 	
 	private QRCodesEncoderChannel owner;
 	private int fragmentNumber;
-	private String fragmentId;
 	
     private final String fragmentHeaderText;
     private final String data;
@@ -15,10 +14,9 @@ public class QRCodeEncodedFragment {
     private WeakReference<BufferedImage> imgRef;
 	private boolean acknowledge;
 
-    public QRCodeEncodedFragment(QRCodesEncoderChannel owner, int fragmentNumber, String fragmentId, String fragmentHeaderText, String data) {
+    public QRCodeEncodedFragment(QRCodesEncoderChannel owner, int fragmentNumber, String fragmentHeaderText, String data) {
         this.owner = owner;
         this.fragmentNumber = fragmentNumber;
-        this.fragmentId = fragmentId;
         this.fragmentHeaderText = fragmentHeaderText;
     	this.data = data;
     }
@@ -27,10 +25,6 @@ public class QRCodeEncodedFragment {
 		return fragmentNumber;
 	}
 
-    public String getFragmentId() {
-    	return fragmentId;
-    }
-    
 	public String getData() {
         return data;
     }

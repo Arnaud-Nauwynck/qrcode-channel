@@ -6,6 +6,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
 import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
@@ -17,14 +22,16 @@ import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
 
 public class QRCodesEncoderChannel {
 
+	private static final Logger LOG = LoggerFactory.getLogger(QRCodesEncoderChannel.class);
+	
 	private static int ESTIM_HEADER_LEN = 50;
 	
 	private QREncodeSetting qrEncodeSettings;
-	private boolean encodeSha256Fragments = true;
+	private boolean encodeSha256Fragments = false;
 	
 	private int fragmentSequenceNumber = 0; // (sequence number generator)
 
-	private Map<String,QRCodeEncodedFragment> fragments = new LinkedHashMap<>();
+	private Map<Integer,QRCodeEncodedFragment> fragments = new LinkedHashMap<>();
 	
 	// ------------------------------------------------------------------------
 
@@ -42,6 +49,10 @@ public class QRCodesEncoderChannel {
 		Version qrVersion = Version.getVersionForNumber(qrEncodeSettings.getQrVersion());
 		int maxBits = QRCodeUtils.qrCodeBitsCapacity(qrVersion, qrEncodeSettings.getErrorCorrectionLevel());
 		int maxChars = maxBits/8 - ESTIM_HEADER_LEN;
+		
+		maxChars = Math.max(10, maxChars);
+		LOG.info("splitting " + maxChars  + " (" + (maxChars + ESTIM_HEADER_LEN) + ") chars");
+		
 		// split text in "raw" text fragment
 		List<String> splitTexts = new ArrayList<>();
 		String remainText = textContent;
@@ -55,31 +66,37 @@ public class QRCodesEncoderChannel {
 			}
 			remainText= remainText.substring(len, remainTextLength);
 		}
+
+
 		// build Fragment from split text
 		for(String splitText: splitTexts) {
 			int fragSeqNumber = fragmentSequenceNumber++;
-			String fragId = Integer.toString(fragSeqNumber);
 			long crc32 = QRCodecChannelUtils.crc32(splitText);
 
-			String header = fragId + " " + crc32;
+			String header = fragSeqNumber + " " + crc32;
 			if (encodeSha256Fragments) {
 				String checkSha256 = QRCodecChannelUtils.sha256(splitText);
-				header += " SHA=" + checkSha256; 
+				header += " SHA=" + checkSha256;
 	    	}
 	    	
 			header += "\n";
-			QRCodeEncodedFragment frag = new QRCodeEncodedFragment(this, fragSeqNumber, fragId, header, splitText);
-			fragments.put(fragId, frag);
+			QRCodeEncodedFragment frag = new QRCodeEncodedFragment(this, fragSeqNumber, header, splitText);
+			fragments.put(fragSeqNumber, frag);
 		}
+		LOG.info("splitting " + fragments.size() + " frags");
 	}
 
 	public BufferedImage encodeAndRender(String text) {
 		QRCodeWriter qrCodeWriter = new QRCodeWriter();
 	    BitMatrix bitMatrix;
 		try {
-			bitMatrix = qrCodeWriter.encode(text, qrEncodeSettings.getQrCodeFormat(), 
-					qrEncodeSettings.getQrCodeW(), qrEncodeSettings.getQrCodeH(), 
-					qrEncodeSettings.getQrHints());
+			int width = qrEncodeSettings.getQrCodeW();
+			int height = qrEncodeSettings.getQrCodeH();
+			BarcodeFormat qrCodeFormat = qrEncodeSettings.getQrCodeFormat();
+			Map<EncodeHintType, Object> qrHints = qrEncodeSettings.getQrHints();
+			
+			bitMatrix = qrCodeWriter.encode(text, qrCodeFormat, width, height, qrHints);
+			
 		} catch (WriterException ex) {
 			throw new RuntimeException("failed to encode qrcode for text", ex);
 		}
@@ -95,8 +112,8 @@ public class QRCodesEncoderChannel {
 		return res;
 	}
 	
-	public BufferedImage getFragmentImg(String id) {
-		QRCodeEncodedFragment frag = fragments.get(id);
+	public BufferedImage getFragmentImg(int num) {
+		QRCodeEncodedFragment frag = fragments.get(num);
 		if (frag == null) {
 			return null;
 		}

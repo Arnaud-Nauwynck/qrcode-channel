@@ -2,9 +2,9 @@ package fr.an.qrcode.channel.impl;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.zip.CRC32;
 
-import org.apache.commons.codec.binary.Base64;
 
 public class QRCodecChannelUtils {
 
@@ -25,7 +25,7 @@ public class QRCodecChannelUtils {
 		}
 		md.update(data.getBytes());
 		byte[] digest = md.digest();
-		return new String(Base64.encodeBase64(digest));
+		return new String(Base64.getEncoder().encode(digest));
 	}
 
 }

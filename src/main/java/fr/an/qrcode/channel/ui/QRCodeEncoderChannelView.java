@@ -221,7 +221,7 @@ public class QRCodeEncoderChannelView {
         // imageSizeField.setText(model.getQrCodeW() + "," + model.getQrCodeH());
     	
     	FragmentImg fragImg = model.getCurrentDisplayFragment();
-        String fragId = fragImg != null? fragImg.getFragmentId() : "";
+        String fragId = fragImg != null? "" + fragImg.getFragmentNumber() : "";
         qrCodeNumberField.setText(fragId);
         
         int fragmentsSeqNumber = model.getChannelSequenceNumber();

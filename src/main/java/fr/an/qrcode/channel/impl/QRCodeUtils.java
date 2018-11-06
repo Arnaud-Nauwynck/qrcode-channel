@@ -34,7 +34,7 @@ public class QRCodeUtils {
     public static Map<DecodeHintType, Object> createDefaultDecoderHints() {
     	Map<DecodeHintType, Object>  qrHints = new HashMap<>();
         qrHints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
-        qrHints.put(DecodeHintType.PURE_BARCODE, Boolean.TRUE);
+//        qrHints.put(DecodeHintType.PURE_BARCODE, Boolean.TRUE);
         return qrHints;
     }
 }

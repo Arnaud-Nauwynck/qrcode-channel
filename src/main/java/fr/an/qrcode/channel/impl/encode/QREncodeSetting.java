@@ -5,18 +5,23 @@ import java.util.Map;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
+import com.google.zxing.pdf417.encoder.Dimensions;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 
 public class QREncodeSetting {
 
     private BarcodeFormat qrCodeFormat = BarcodeFormat.QR_CODE;
-    private int qrVersion = 40;
+    private int qrVersion = 6; // 40;
     private ErrorCorrectionLevel errorCorrectionLevel = ErrorCorrectionLevel.H;
 
     private Map<EncodeHintType, Object> qrHints;
     
-    private int qrCodeW = 400;
-    private int qrCodeH = 400;
+    int minRows = 20;
+    int maxRows = 50;
+    private int qrCodeW = maxRows;
+    private int qrCodeH = maxRows;
+    
+    private com.google.zxing.pdf417.encoder.Dimensions pdf417Dims;
     
     public QREncodeSetting() {
 		qrHints = new HashMap<>();
@@ -24,6 +29,10 @@ public class QREncodeSetting {
             qrHints.put(EncodeHintType.ERROR_CORRECTION, errorCorrectionLevel);
         }        
         qrHints.put(EncodeHintType.QR_VERSION, qrVersion);
+        
+        pdf417Dims = new Dimensions(minRows, maxRows, minRows, maxRows);
+        qrHints.put(EncodeHintType.PDF417_DIMENSIONS, pdf417Dims);
+   
 	}
 
 	public BarcodeFormat getQrCodeFormat() {

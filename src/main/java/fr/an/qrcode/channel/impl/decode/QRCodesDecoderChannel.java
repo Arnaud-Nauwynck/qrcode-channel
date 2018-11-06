@@ -21,7 +21,9 @@ import fr.an.qrcode.channel.impl.QRCodeUtils;
 import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
 
 public class QRCodesDecoderChannel {
-		
+
+	private boolean useSHA = false;
+	
 	private Map<DecodeHintType, Object> qrHints;
 	
 	private String readyText = "";
@@ -68,8 +70,11 @@ public class QRCodesDecoderChannel {
         } catch(NotFoundException ex) {
         	res.decodeMsg = "no qr code found";
             return res;
-        } catch (ReaderException ex) {
-        	res.decodeMsg = "\n<<<<<<<< FAILED to decode QRCode: " + ex.getMessage() + ">>>>>>>>>>>>\n";
+        } catch(com.google.zxing.ChecksumException ex) {
+        	res.decodeMsg = "\n<<<<<<<< FAILED to decode QRCode: ChecksumException >>>>>>>>>>>>\n";
+            return res;
+        } catch(com.google.zxing.FormatException ex) {
+        	res.decodeMsg = "\n<<<<<<<< FAILED to decode QRCode: FormatException >>>>>>>>>>>>\n";
             return res;
         }
         
@@ -87,6 +92,7 @@ public class QRCodesDecoderChannel {
 
     
     private static final Pattern fragmentHeaderPattern = Pattern.compile("([0-9\\.]*) ([0-9]+) ([^\n]*)");
+    private static final Pattern fragmentHeaderNoSHAPattern = Pattern.compile("([0-9\\.]*) ([0-9]+)");
     
     protected void handleFragmentHeaderAndData(SnapshotFragmentResult res, String headerAndData) {
     	int lineSep = headerAndData.indexOf("\n");
@@ -96,7 +102,7 @@ public class QRCodesDecoderChannel {
     	}
     	String header = headerAndData.substring(0, lineSep);
     	String data = headerAndData.substring(lineSep+1, headerAndData.length());
-    	Matcher headerMatcher = fragmentHeaderPattern.matcher(header);
+    	Matcher headerMatcher = ((useSHA)? fragmentHeaderPattern : fragmentHeaderNoSHAPattern).matcher(header);
     	if (! headerMatcher.matches()) {
     		res.decodeMsg = "header not recognised: " + header;
     		return;
@@ -117,16 +123,18 @@ public class QRCodesDecoderChannel {
     		return;
     	}
     	
-    	String headerArgs = headerMatcher.group(3);
-    	if (headerArgs != null && headerArgs.startsWith("SHA=")) {
-    		int endShaIdx = headerArgs.indexOf(" ");
-    		if (endShaIdx == -1) endShaIdx = headerArgs.length(); 
-    		String sha256 = headerArgs.substring(4, endShaIdx);
-	    	String checkSha256 = QRCodecChannelUtils.sha256(data);
-	    	if (! checkSha256.equals(sha256)) {
-	    		res.decodeMsg = "corrupted data: SHA-256 differs for fragId:" + fragId;
-	    		return;
-	    	}
+    	if (useSHA) {
+    		String headerArgs = headerMatcher.group(3);
+    		if (headerArgs != null && headerArgs.startsWith("SHA=")) {
+	    		int endShaIdx = headerArgs.indexOf(" ");
+	    		if (endShaIdx == -1) endShaIdx = headerArgs.length(); 
+	    		String sha256 = headerArgs.substring(4, endShaIdx);
+		    	String checkSha256 = QRCodecChannelUtils.sha256(data);
+		    	if (! checkSha256.equals(sha256)) {
+		    		res.decodeMsg = "corrupted data: SHA-256 differs for fragId:" + fragId;
+		    		return;
+		    	}
+    		}
     	}
     	
     	// ok, got id + data...
