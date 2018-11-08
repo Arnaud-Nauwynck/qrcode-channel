@@ -21,11 +21,11 @@ import com.google.zxing.DecodeHintType;
 import fr.an.qrcode.channel.impl.QRCodeUtils;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
-import fr.an.qrcode.channel.impl.decode.DesktopScreenshotImageProvider;
-import fr.an.qrcode.channel.impl.decode.ImageProvider;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel;
-import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.SnapshotFragmentResult;
-import fr.an.qrcode.channel.impl.decode.WebcamImageProvider;
+import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.QRPacketResult;
+import fr.an.qrcode.channel.impl.decode.input.DesktopScreenshotImageProvider;
+import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
+import fr.an.qrcode.channel.impl.decode.input.WebcamImageProvider;
 
 /**
  * model associated to QRCodeDecoderChannelView<BR/>
@@ -52,7 +52,7 @@ public class QRCodeDecoderChannelModel {
     
     private String fullText = "";
     private BufferedImage currentScreenshotImg;
-    private SnapshotFragmentResult currentSnapshotResult;
+    private QRPacketResult currentSnapshotResult;
     
     // ------------------------------------------------------------------------
 
@@ -150,12 +150,12 @@ public class QRCodeDecoderChannelModel {
         pcs.firePropertyChange("fullText", prev, p);
     }
 
-    public SnapshotFragmentResult getCurrentSnapshotResult() {
+    public QRPacketResult getCurrentSnapshotResult() {
 		return currentSnapshotResult;
 	}
 
-	public void setCurrentSnapshotResult(SnapshotFragmentResult p) {
-		SnapshotFragmentResult prev = currentSnapshotResult; 
+	public void setCurrentSnapshotResult(QRPacketResult p) {
+		QRPacketResult prev = currentSnapshotResult; 
 		this.currentSnapshotResult = p;
         pcs.firePropertyChange("currentSnapshotResult", prev, p);
 	}

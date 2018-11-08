@@ -10,6 +10,7 @@ import java.awt.event.ComponentEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
+import java.util.concurrent.TimeUnit;
 
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
@@ -29,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
-import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.SnapshotFragmentResult;
+import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.QRPacketResult;
 import fr.an.qrcode.channel.ui.QRCodeDecoderChannelModel.ImageProviderMode;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
 import fr.an.qrcode.channel.ui.utils.TransparentFrameScreenArea;
@@ -317,9 +318,10 @@ public class QRCodeDecoderChannelView {
     private void model2view() {
         recordArea_modelToView();
         
-        SnapshotFragmentResult currentSnapshotResult = model.getCurrentSnapshotResult();
+        QRPacketResult currentSnapshotResult = model.getCurrentSnapshotResult();
         currentDecodeMessageLabel.setText(currentSnapshotResult != null? currentSnapshotResult.decodeMsg : "");
-        currentDecodeTimeMillisLabel.setText(currentSnapshotResult != null? currentSnapshotResult.millis + " ms" : "");
+        currentDecodeTimeMillisLabel.setText(currentSnapshotResult != null? 
+        		TimeUnit.NANOSECONDS.toMillis(currentSnapshotResult.nanosCompute) + " ms" : "");
         
         String fullText = model.getFullText();
         outputTextArea.setText(fullText);

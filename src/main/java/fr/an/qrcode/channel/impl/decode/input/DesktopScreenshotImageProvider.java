@@ -1,4 +1,4 @@
-package fr.an.qrcode.channel.impl.decode;
+package fr.an.qrcode.channel.impl.decode.input;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
