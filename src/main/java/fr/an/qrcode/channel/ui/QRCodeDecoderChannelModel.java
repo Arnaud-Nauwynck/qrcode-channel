@@ -2,17 +2,10 @@ package fr.an.qrcode.channel.ui;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBuffer;
-import java.awt.image.DataBufferByte;
-import java.awt.image.DataBufferInt;
-import java.awt.image.WritableRaster;
 import java.beans.PropertyChangeListener;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.zip.CRC32;
 
 import javax.swing.SwingUtilities;
 import javax.swing.event.SwingPropertyChangeSupport;
@@ -23,112 +16,44 @@ import org.slf4j.LoggerFactory;
 import com.github.sarxos.webcam.Webcam;
 import com.github.sarxos.webcam.WebcamException;
 import com.github.sarxos.webcam.ds.openimaj.OpenImajDriver;
+import com.google.zxing.DecodeHintType;
 
+import fr.an.qrcode.channel.impl.QRCodeUtils;
+import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
+import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
+import fr.an.qrcode.channel.impl.decode.DesktopScreenshotImageProvider;
+import fr.an.qrcode.channel.impl.decode.ImageProvider;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.SnapshotFragmentResult;
-import fr.an.qrcode.channel.ui.utils.DesktopScreenSnaphotProvider;
+import fr.an.qrcode.channel.impl.decode.WebcamImageProvider;
 
 /**
  * model associated to QRCodeDecoderChannelView<BR/>
  * 
- * take screenshot of rectangular record area, decode QRCode, concatenate text result
+ * delegate all to underlying QRCodesDecoderChannel
+ * wrap event callbacks with SwingUtilities.invokeLater
+ * handle creation / reset of QRCodesDecoderChannel
  */
 public class QRCodeDecoderChannelModel {
-
 	
 	private static final Logger LOG = LoggerFactory.getLogger(QRCodeDecoderChannelModel.class);
 	
     private SwingPropertyChangeSupport pcs = new SwingPropertyChangeSupport(this);
-
-    public static abstract class ImageProvider {
-
-	    protected Rectangle recordArea = new Rectangle(40,217,740,720);
-
-    	public abstract BufferedImage captureImage();
-
-		public abstract void parseRecordParamsText(String recordParamsText);
-		
-		public Rectangle getRecordArea() {
-			return this.recordArea;
-		}
-
-		public void setRecordArea(Rectangle r) {
-			this.recordArea = r;
-		}
-
-    }
+    private DecoderChannelListener uiEventListener;
     
+    public static enum ImageProviderMode { DesktopScreenshot, WebCam };
+    ImageProviderMode imageProviderMode = ImageProviderMode.DesktopScreenshot;
     DesktopScreenshotImageProvider desktopImageProvider = new DesktopScreenshotImageProvider();
     WebcamImageProvider webcamImageProvider; // = new WebcamImageProvider();
-    
-    ImageProvider imageProvider = desktopImageProvider;
-    
-    public static class DesktopScreenshotImageProvider extends ImageProvider { 
-    	private DesktopScreenSnaphotProvider screenSnaphostProvider = new DesktopScreenSnaphotProvider(false, true);
-
-		@Override
-		public BufferedImage captureImage() {
-			return screenSnaphostProvider.captureScreen(recordArea);
-		}
-
-		@Override
-		public void parseRecordParamsText(String recordParamsText) {
-			String[] coordTexts = recordParamsText.split(",");
-	        int x = Integer.parseInt(coordTexts[0]);
-	        int y = Integer.parseInt(coordTexts[1]);
-	        int w = Integer.parseInt(coordTexts[2]);
-	        int h = Integer.parseInt(coordTexts[3]);
-	        recordArea = new Rectangle(x, y, w, h);
-		}
-		
-    }
-
-
-    public static class WebcamImageProvider extends ImageProvider { 
-    	
-    	private Webcam webcam;
-
-	    public WebcamImageProvider() {
-	    }
-	    
-	    public void init(Webcam webcam) {
-	    	if (webcam == null) {
-		    	webcam = Webcam.getDefault();
-	    	}
-	    	this.webcam = webcam;
-//	    	webcam.open();
-//	    	webcam.close();
-	    }
-	    
-		@Override
-		public BufferedImage captureImage() {
-			if (! webcam.isOpen()) {
-				webcam.open();
-			}
-			return webcam.getImage();
-		}
-
-		@Override
-		public void parseRecordParamsText(String recordParamsText) {
-			// TODO
-		}
-    }
-    
+        
+    private Map<DecodeHintType, Object> qrDecoderHints = QRCodeUtils.createDefaultDecoderHints();
     
     private QRCodesDecoderChannel decoderChannel;
     
     private String fullText = "";
-    
     private BufferedImage currentScreenshotImg;
-    private long currentScreenshotImgCrc32;
     private SnapshotFragmentResult currentSnapshotResult;
     
-    private AtomicBoolean stopListenSnapshotsRequested = new AtomicBoolean(true);
-    private AtomicBoolean listenSnapshotsRunning = new AtomicBoolean(false);
-	private long sleepMillis = 2;
-
-	private ExecutorService snapshotExecutor = Executors.newSingleThreadExecutor();
-	
     // ------------------------------------------------------------------------
 
     public QRCodeDecoderChannelModel() {
@@ -138,20 +63,29 @@ public class QRCodeDecoderChannelModel {
     // ------------------------------------------------------------------------
 
     public void reset() {
-    	stopListenSnapshots();
-    	this.decoderChannel = new QRCodesDecoderChannel();
+    	if (this.decoderChannel != null) {
+    		LOG.info("reset");
+    		this.decoderChannel.stopListenSnapshots();
+    	}
+    	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints, createImageProvider(), e -> onDecoderChannelEvent(e));
     	this.currentScreenshotImg = null;
-    	this.currentScreenshotImgCrc32 = 0;
     	setCurrentSnapshotResult(null);
     	setFullText("");
-    	stopListenSnapshotsRequested.set(true);
     }
     
-    public void takeSnapshot() {
-    	snapshotExecutor.submit(() -> doCaptureAndHandleSnapshot());
+    public void setUiEventListener(DecoderChannelListener uiEventListener) {
+    	this.uiEventListener = uiEventListener; 
+    }
+    
+    protected ImageProvider createImageProvider() {
+    	switch(imageProviderMode) {
+    	case DesktopScreenshot: return desktopImageProvider;
+    	case WebCam:return createWebcamImageProvider();
+    	default: throw new IllegalStateException();
+    	}
     }
 
-	public void setSourceWebcam() {
+    protected ImageProvider createWebcamImageProvider() {
 		if (webcamImageProvider == null) {
 			Webcam.setDriver(new OpenImajDriver());
 			
@@ -159,121 +93,41 @@ public class QRCodeDecoderChannelModel {
 			try {
 				webcam = Webcam.getDefault(10, TimeUnit.SECONDS);
 			} catch (WebcamException | TimeoutException ex) {
-				LOG.error("Failed to detec webcam", ex);
-				return;
+				throw new IllegalStateException("Failed to detect webcam", ex);
+			}
+			if (webcam == null) {
+				throw new IllegalStateException("No detected webcam");
 			}
 
-			Webcam.getDiscoveryService().stop(); // avoid re-discovery loop ???
+			Webcam.getDiscoveryService().stop(); // avoid useless re-discovery loop ???
 
 			webcamImageProvider = new WebcamImageProvider();
 
 			webcamImageProvider.init(webcam);
 		}
-		this.imageProvider = webcamImageProvider;
+		return webcamImageProvider;
 	}
 
-	public void setSourceScreenshot() {
-		this.imageProvider = desktopImageProvider;
-	}
-
-	
-    public SnapshotFragmentResult doCaptureAndHandleSnapshot() {
-		long startTime = System.currentTimeMillis();
-
-		BufferedImage img = imageProvider.captureImage();
-		if (img == null) {
-			LOG.error("null img");
+	public void setImageProviderMode(ImageProviderMode mode) {
+		if (mode != this.imageProviderMode) { 	
+			this.imageProviderMode = mode;
+			reset();
 		}
-		
-        long imgCrc32 = imgCrc32(img);
-        if (currentScreenshotImgCrc32 == imgCrc32) {
-        	return null; // exact same screenshot ..ignore
-        }
-        		
-        SnapshotFragmentResult snapshotResult = decoderChannel.handleSnapshot(img);
-
-        long timeMillis = System.currentTimeMillis() - startTime;
-        currentScreenshotImgCrc32 = imgCrc32;
-        
-        String readyText = decoderChannel.getReadyText();
-        
-        snapshotResult.millis = timeMillis;
-        
-        SwingUtilities.invokeLater(() -> {
-        	setCurrentScreenshotImg(img);
-        	setCurrentSnapshotResult(snapshotResult);
-	        setFullText(readyText);
-        });
-        return snapshotResult;
-	}  
-    
-
-    public static long imgCrc32(BufferedImage img) {
-    	CRC32 crc = new CRC32();
-        WritableRaster imgRaster = img.getRaster();
-        DataBuffer dataBuffer = imgRaster.getDataBuffer();
-        if (dataBuffer instanceof DataBufferInt) {
-        	DataBufferInt di = (DataBufferInt) dataBuffer;
-        	final int[] data = di.getData();
-            for(int d : data) {
-            	crc.update(d);
-            }
-        } else if (dataBuffer instanceof DataBufferByte) {
-        	DataBufferByte di = (DataBufferByte) dataBuffer;
-        	final byte[] data = di.getData();
-            for(int d : data) {
-            	crc.update(d);
-            }
-        } else {
-        	throw new UnsupportedOperationException("not impl");
-        }
-		return crc.getValue();
 	}
 
-	public void startListenSnapshots() {
-    	if (listenSnapshotsRunning.get()) {
-    		return;
-    	}
-    	stopListenSnapshotsRequested.set(false);
-    	snapshotExecutor.submit(() -> listenSnapshotLoop());
-    }
-    
-    private void listenSnapshotLoop() {
-    	listenSnapshotsRunning.set(true);
-    	try {
-	    	for(;;) {
-		    	if (stopListenSnapshotsRequested.get()) {
-		    		break;
-		    	}
-		    	long timeBefore = System.currentTimeMillis();
-		    	
-		    	doCaptureAndHandleSnapshot();
-		    	
-	    		long timeAfter = System.currentTimeMillis();
-	    		long actualSleepMillis = (timeBefore + sleepMillis) - timeAfter;
-	    		if (actualSleepMillis > 0) { 
-			    	try {
-						Thread.sleep(actualSleepMillis);
-					} catch (InterruptedException e) {
-					}
-	    		}
-	    	}
-    	} catch(Exception ex) {
-    		LOG.error("Failed");
-    	}
-		listenSnapshotsRunning.set(false);
-    }
-    
-    public void stopListenSnapshots() {
-    	if (! listenSnapshotsRunning.get()) {
-    		return;
-    	}
-    	stopListenSnapshotsRequested.set(true);
-    }
-    
-    
-    // ------------------------------------------------------------------------
 	
+    protected void onDecoderChannelEvent(DecoderChannelEvent event) {
+    	SwingUtilities.invokeLater(() -> {
+    		// startTime;
+    		// timeMillis;
+    		this.currentScreenshotImg = event.img;
+    		this.currentSnapshotResult = event.snapshotResult;
+    		this.fullText = event.readyText;
+    		
+    		uiEventListener.onEvent(event);
+    	});
+    }
+    
     public void addPropertyChangeListener(PropertyChangeListener listener) {
 		pcs.addPropertyChangeListener(listener);
 	}
@@ -316,20 +170,40 @@ public class QRCodeDecoderChannelModel {
         return currentScreenshotImg;
     }
 
+
+	// delegate to decoderChannel 
+	// --------------------------------------------------------------------------------------------
+
+	public QRCodesDecoderChannel getDecoderChannel() {
+		return decoderChannel;
+	}
+	
+	public void takeSnapshot() {
+		decoderChannel.takeSnapshot();
+	}
+	
+	public void startListenSnapshots() {
+		decoderChannel.startListenSnapshots();
+	}
+
+	public void stopListenSnapshots() {
+		decoderChannel.stopListenSnapshots();
+	}
+	
 	public String getAheadFragsInfo() {
         return decoderChannel.getAheadFragsInfo();
 	}
 
 	public void parseRecordParamsText(String recordParamsText) {
-		imageProvider.parseRecordParamsText(recordParamsText);
+		decoderChannel.parseRecordParamsText(recordParamsText);
 	}
 
 	public Rectangle getRecordArea() {
-		return imageProvider.getRecordArea();
+		return decoderChannel.getRecordArea();
 	}
 
 	public void setRecordArea(Rectangle r) {
-		imageProvider.setRecordArea(r);
+		decoderChannel.setRecordArea(r);
 	}
 
 

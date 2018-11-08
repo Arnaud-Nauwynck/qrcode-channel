@@ -27,7 +27,10 @@ import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
+import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.SnapshotFragmentResult;
+import fr.an.qrcode.channel.ui.QRCodeDecoderChannelModel.ImageProviderMode;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
 import fr.an.qrcode.channel.ui.utils.TransparentFrameScreenArea;
 
@@ -41,7 +44,8 @@ public class QRCodeDecoderChannelView {
 	
     private QRCodeDecoderChannelModel model = new QRCodeDecoderChannelModel();
     
-    private PropertyChangeListener listener = (evt) -> onModelPropChangeEvent(evt);
+    private DecoderChannelListener uiEventListener = e -> onDecoderChannelEvent(e);
+    private PropertyChangeListener propChangeListener = (evt) -> onModelPropChangeEvent(evt);
 
     private JPanel mainComponent;
     private JTabbedPane tabbedPane;
@@ -88,7 +92,8 @@ public class QRCodeDecoderChannelView {
     	this.model = model;
         initUI();
         if (model != null) {
-        	model.addPropertyChangeListener(listener);
+        	model.addPropertyChangeListener(propChangeListener);
+        	model.setUiEventListener(uiEventListener);
         }
     }
 
@@ -132,11 +137,11 @@ public class QRCodeDecoderChannelView {
             sourceScreenshotRadioButton = new JRadioButton("screen");
             recorderToolbar.add(sourceScreenshotRadioButton);
             sourceScreenshotRadioButton.setSelected(true);
-            sourceScreenshotRadioButton.addActionListener(e -> onSourceScreenshotChosen());
+            sourceScreenshotRadioButton.addActionListener(e -> model.setImageProviderMode(ImageProviderMode.DesktopScreenshot));
 
             sourceWebcamRadioButton = new JRadioButton("webcam");
             recorderToolbar.add(sourceWebcamRadioButton);
-            sourceWebcamRadioButton.addActionListener(e -> onSourceWebcamChosen());
+            sourceWebcamRadioButton.addActionListener(e -> model.setImageProviderMode(ImageProviderMode.WebCam));
             
             sourceButtonGroup = new ButtonGroup();
             sourceButtonGroup.add(sourceScreenshotRadioButton);
@@ -204,18 +209,6 @@ public class QRCodeDecoderChannelView {
         model2view();
     }
 
-    private void onSourceWebcamChosen() {
-    	model.setSourceWebcam();
-    }
-
-    private void onSourceScreenshotChosen() {
-    	model.setSourceScreenshot();
-    }
-
-	private void onModelPropChangeEvent(PropertyChangeEvent evt) {
-		model2view();
-	}
-
     public void onReset() {
     	model.reset();
     	onClearTextAction();
@@ -241,6 +234,7 @@ public class QRCodeDecoderChannelView {
     	new SwingWorker<String,Void>() {
 			@Override
 			protected String doInBackground() throws Exception {
+				LOG.info("writing file: " + outputFile.getAbsolutePath());
 				try {
 					FileUtils.write(outputFile, content);
 					return "done write file";
@@ -304,6 +298,21 @@ public class QRCodeDecoderChannelView {
         String coord = r.x + "," + r.y + "," + (int)r.getWidth() + "," + (int)r.getHeight();
         recordAreaField.setText(coord);
     }
+
+	private void onModelPropChangeEvent(PropertyChangeEvent evt) {
+		String prop = evt.getPropertyName();
+		if (prop.equals("currentScreenshotImg")) {
+			qrCodeImageCanvas.setImage(model.getCurrentScreenshotImg());
+	        qrCodeImageCanvas.repaint();
+		} else {
+			// tochange? update all properties.. not efficient
+			model2view(); 
+		}
+	}
+
+    protected void onDecoderChannelEvent(DecoderChannelEvent event) {
+    	model2view();
+    }
     
     private void model2view() {
         recordArea_modelToView();
@@ -320,7 +329,6 @@ public class QRCodeDecoderChannelView {
         
         qrCodeImageCanvas.setImage(model.getCurrentScreenshotImg());
         qrCodeImageCanvas.repaint();
-        // LOG.debug("repaint img");
         
         // saveFileMessageLabel.setText();
     }
