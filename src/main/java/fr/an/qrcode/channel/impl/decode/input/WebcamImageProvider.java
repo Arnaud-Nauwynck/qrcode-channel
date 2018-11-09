@@ -1,35 +1,42 @@
 package fr.an.qrcode.channel.impl.decode.input;
 
+import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 
 import com.github.sarxos.webcam.Webcam;
 
-public class WebcamImageProvider extends ImageProvider { 
-    	
-    	private Webcam webcam;
+public class WebcamImageProvider extends ImageProvider {
 
-	    public WebcamImageProvider() {
-	    }
-	    
-	    public void init(Webcam webcam) {
-	    	if (webcam == null) {
-		    	webcam = Webcam.getDefault();
-	    	}
-	    	this.webcam = webcam;
+	private Webcam webcam;
+
+	public WebcamImageProvider() {
+	}
+
+	public void init(Webcam webcam) {
+		if (webcam == null) {
+			webcam = Webcam.getDefault();
+		}
+		this.webcam = webcam;
 //	    	webcam.open();
 //	    	webcam.close();
-	    }
-	    
-		@Override
-		public BufferedImage captureImage() {
-			if (! webcam.isOpen()) {
-				webcam.open();
-			}
-			return webcam.getImage();
-		}
+	}
 
-		@Override
-		public void parseRecordParamsText(String recordParamsText) {
-			// TODO
+	@Override
+	public BufferedImage captureImage() {
+		if (!webcam.isOpen()) {
+			webcam.open();
 		}
-    }
+		return webcam.getImage();
+	}
+
+	@Override
+	public void parseRecordParamsText(String recordParamsText) {
+		// TODO
+	}
+
+	@Override
+	public Dimension getSize() {
+		return webcam.getViewSize();
+	}
+
+}

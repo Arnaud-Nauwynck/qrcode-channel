@@ -1,4 +1,4 @@
-package fr.an.qrcode.channel.impl.encode;
+package fr.an.qrcode.channel.impl;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -11,7 +11,13 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 public class QREncodeSetting {
 
     private BarcodeFormat qrCodeFormat = BarcodeFormat.QR_CODE;
-    private int qrVersion = 6; // 40;
+    private int qrVersion = 
+    		6; 
+// 			7;
+//    		8;
+// 			20;
+//			40;
+    
     private ErrorCorrectionLevel errorCorrectionLevel = ErrorCorrectionLevel.H;
 
     private Map<EncodeHintType, Object> qrHints;

@@ -13,24 +13,20 @@ import org.slf4j.LoggerFactory;
 
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.DecodeHintType;
-import com.google.zxing.LuminanceSource;
 import com.google.zxing.NotFoundException;
 import com.google.zxing.Result;
-import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
-import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
 
 import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
-import fr.an.qrcode.channel.impl.decode.filter.ImageStreamCallback;
+import fr.an.qrcode.channel.impl.decode.filter.BinaryImageStreamCallback;
 import fr.an.qrcode.channel.impl.decode.filter.ImageStreamProvider;
+import fr.an.qrcode.channel.impl.decode.filter.SubSamplingDelegateImageStreamCallback;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
 
 public class QRCodesDecoderChannel {
 
 	private static final Logger log = LoggerFactory.getLogger(QRCodesDecoderChannel.class);
 
-	private boolean useSHA = false;
-	
 	private Map<DecodeHintType, Object> qrHints;
 	
 	private String readyText = "";
@@ -41,20 +37,25 @@ public class QRCodesDecoderChannel {
 	
     private ImageStreamProvider imageStreamProvider;
     
-    private ImageStreamCallback innerImageStreamCallback = new ImageStreamCallback() {
+    private BinaryImageStreamCallback innerImageStreamCallback = new BinaryImageStreamCallback() {
 		@Override
-		public void onImage(BufferedImage image, long nanosTime, long nanos) {
+		public void onImage(BufferedImage img, BinaryBitmap bitmap, long nanosTime, long nanos) {
 			try {
-				onStream_handleImage(image, nanosTime, nanos);
+				onStream_handleBitmap(img, bitmap, nanosTime, nanos);
 			} catch(Exception ex) {
 				log.warn("Failed to handle image", ex);
 			}
+		}
+		@Override
+		public void onDropImage(BufferedImage img, long nanosTime, long nanos) {
+			// do nothing?
 		}
     };
 
     private QRCodeReader qrCodeReader = new QRCodeReader();
 
 	private BufferedImage currentImg;
+	private BinaryBitmap currentBitmap;
 	
     private QRPacketResult currentSnapshotResult;
 
@@ -71,7 +72,9 @@ public class QRCodesDecoderChannel {
 			ImageProvider imageProvider, 
 			DecoderChannelListener eventListener) {
 		this.qrHints = qrHints;
-		this.imageStreamProvider = new ImageStreamProvider(imageProvider, innerImageStreamCallback);
+		int samplingLen = 3;
+		SubSamplingDelegateImageStreamCallback imageToBitmapFilter = new SubSamplingDelegateImageStreamCallback(innerImageStreamCallback, samplingLen);
+		this.imageStreamProvider = new ImageStreamProvider(imageProvider, imageToBitmapFilter);
 		this.eventListener = eventListener;
 	}
 
@@ -101,27 +104,27 @@ public class QRCodesDecoderChannel {
 		public long nanosCompute;
 	}
 	
-	protected void onStream_handleImage(BufferedImage img, long captureNanosTime, long captureNanos) {
+	protected void onStream_handleBitmap(BufferedImage img, 
+			BinaryBitmap bitmap, long captureNanosTime, long captureNanos) {
 		this.currentImg = img;
-
+		this.currentBitmap = bitmap;
+		
 		long nanosComputeBefore = System.nanoTime();
 		
-        QRPacketResult snapshotResult = computeQRPacketResult(img);
+        QRPacketResult snapshotResult = computeQRPacketResult(bitmap);
 
         long nanosCompute = System.nanoTime() - nanosComputeBefore;
 		        
         snapshotResult.nanosCompute = nanosCompute;
         eventListener.onEvent(new DecoderChannelEvent(img, captureNanosTime, captureNanos,
+        		bitmap, 
         		snapshotResult, nanosComputeBefore, nanosCompute,
         		readyText));
 	}  
     
-	public QRPacketResult computeQRPacketResult(BufferedImage img) {
+	public QRPacketResult computeQRPacketResult(BinaryBitmap bitmap) {
 		QRPacketResult res = new QRPacketResult();
-		
-        LuminanceSource source = new BufferedImageLuminanceSource(img);
-        BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
-        
+       
         Result qrResult;
         try {
         	qrResult = qrCodeReader.decode(bitmap, qrHints);
@@ -153,8 +156,7 @@ public class QRCodesDecoderChannel {
 
 	
 	
-    private static final Pattern fragmentHeaderPattern = Pattern.compile("([0-9\\.]*) ([0-9]+) ([^\n]*)");
-    private static final Pattern fragmentHeaderNoSHAPattern = Pattern.compile("([0-9\\.]*) ([0-9]+)");
+    private static final Pattern fragmentHeaderPattern = Pattern.compile("([0-9\\.]*) ([0-9]+)");
     
     protected void handleFragmentHeaderAndData(QRPacketResult res, String headerAndData) {
     	int lineSep = headerAndData.indexOf("\n");
@@ -164,7 +166,7 @@ public class QRCodesDecoderChannel {
     	}
     	String header = headerAndData.substring(0, lineSep);
     	String data = headerAndData.substring(lineSep+1, headerAndData.length());
-    	Matcher headerMatcher = ((useSHA)? fragmentHeaderPattern : fragmentHeaderNoSHAPattern).matcher(header);
+    	Matcher headerMatcher = fragmentHeaderPattern.matcher(header);
     	if (! headerMatcher.matches()) {
     		res.decodeMsg = "header not recognised: " + header;
     		return;
@@ -183,20 +185,6 @@ public class QRCodesDecoderChannel {
     	if (checkCrc32 != crc32) {
     		res.decodeMsg = "corrupted data: crc32 differs for fragId:" + fragId;
     		return;
-    	}
-    	
-    	if (useSHA) {
-    		String headerArgs = headerMatcher.group(3);
-    		if (headerArgs != null && headerArgs.startsWith("SHA=")) {
-	    		int endShaIdx = headerArgs.indexOf(" ");
-	    		if (endShaIdx == -1) endShaIdx = headerArgs.length(); 
-	    		String sha256 = headerArgs.substring(4, endShaIdx);
-		    	String checkSha256 = QRCodecChannelUtils.sha256(data);
-		    	if (! checkSha256.equals(sha256)) {
-		    		res.decodeMsg = "corrupted data: SHA-256 differs for fragId:" + fragId;
-		    		return;
-		    	}
-    		}
     	}
     	
     	// ok, got id + data...
@@ -252,6 +240,10 @@ public class QRCodesDecoderChannel {
 	
 	public BufferedImage getCurrentImg() {
 		return currentImg;
+	}
+
+	public BinaryBitmap getBitmap() {
+		return currentBitmap;
 	}
 
     public QRPacketResult getCurrentSnapshotResult() {

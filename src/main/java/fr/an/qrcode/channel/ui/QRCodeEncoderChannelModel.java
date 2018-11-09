@@ -13,9 +13,9 @@ import javax.swing.event.SwingPropertyChangeSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import fr.an.qrcode.channel.impl.QREncodeSetting;
 import fr.an.qrcode.channel.impl.encode.FragmentImg;
 import fr.an.qrcode.channel.impl.encode.QRCodesEncoderChannel;
-import fr.an.qrcode.channel.impl.encode.QREncodeSetting;
 
 /**
  * model associated to QRCodeEncoderChannelView<BR/>
@@ -38,7 +38,7 @@ public class QRCodeEncoderChannelModel {
     private ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
     protected AtomicBoolean displayLoopRunning = new AtomicBoolean(false);
     protected AtomicBoolean displayLoopStopRequested = new AtomicBoolean(false);
-	protected long millisBetweenImg = 200;
+	protected long millisBetweenImg = 60;
 	protected boolean hideFragmentAfterPlay = true;
 	
 	// computed imgs
@@ -126,7 +126,7 @@ public class QRCodeEncoderChannelModel {
     }
 
 	public void onDisplayFrag(int n) {
-		this.currDisplayIndex = n;
+		this.currDisplayIndex = Math.max(0, Math.min(n, fragmentImgs.size()));
 		setCurrentDisplayFragment(fragmentImgs.get(currDisplayIndex));
 	}
 

@@ -7,6 +7,8 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
 
+import fr.an.qrcode.channel.impl.QREncodeSetting;
+
 public class QRCodesEncoderChannelTest {
 
 	protected QRCodesEncoderChannel sut = new QRCodesEncoderChannel(new QREncodeSetting());

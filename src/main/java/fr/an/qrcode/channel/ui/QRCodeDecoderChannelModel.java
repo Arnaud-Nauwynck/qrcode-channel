@@ -1,5 +1,6 @@
 package fr.an.qrcode.channel.ui;
 
+import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeListener;
@@ -36,7 +37,7 @@ import fr.an.qrcode.channel.impl.decode.input.WebcamImageProvider;
  */
 public class QRCodeDecoderChannelModel {
 	
-	private static final Logger LOG = LoggerFactory.getLogger(QRCodeDecoderChannelModel.class);
+	private static final Logger log = LoggerFactory.getLogger(QRCodeDecoderChannelModel.class);
 	
     private SwingPropertyChangeSupport pcs = new SwingPropertyChangeSupport(this);
     private DecoderChannelListener uiEventListener;
@@ -64,7 +65,7 @@ public class QRCodeDecoderChannelModel {
 
     public void reset() {
     	if (this.decoderChannel != null) {
-    		LOG.info("reset");
+    		log.info("reset");
     		this.decoderChannel.stopListenSnapshots();
     	}
     	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints, createImageProvider(), e -> onDecoderChannelEvent(e));
@@ -99,6 +100,19 @@ public class QRCodeDecoderChannelModel {
 				throw new IllegalStateException("No detected webcam");
 			}
 
+			Dimension[] viewSizes = webcam.getViewSizes();
+			Dimension bestViewSize = viewSizes[0];
+			for(Dimension viewSize : viewSizes) {
+				if (viewSize.getHeight()*viewSize.getWidth() > bestViewSize.getHeight()*bestViewSize.getWidth()) {
+					bestViewSize = viewSize;
+				}
+			}
+			Dimension currViewSize = webcam.getViewSize();
+			if (currViewSize == null || ! currViewSize.equals(bestViewSize)) {
+				log.info("changing viewSize:" + currViewSize + " -> " + bestViewSize);
+				webcam.setViewSize(bestViewSize);
+			}
+			
 			Webcam.getDiscoveryService().stop(); // avoid useless re-discovery loop ???
 
 			webcamImageProvider = new WebcamImageProvider();

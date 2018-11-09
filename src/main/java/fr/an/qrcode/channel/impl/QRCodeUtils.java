@@ -13,12 +13,12 @@ public class QRCodeUtils {
 	    Version version = Version.getVersionForNumber(versionNumber);
 	    int dimForVersion = version.getDimensionForVersion();
 	    for(ErrorCorrectionLevel ecLevel : ErrorCorrectionLevel.values()) {
-	        int maxBytes = qrCodeBitsCapacity(version, ecLevel) / 8;
+	        int maxBytes = qrCodeBytesCapacity(version, ecLevel) / 8;
 	        System.out.println("QRCode v " + versionNumber + " (dim:" + dimForVersion + "), ecLevel:" + ecLevel + " => maxBytes:" + maxBytes);
 	    }
 	}
 	
-	public static int qrCodeBitsCapacity(Version version, ErrorCorrectionLevel ecLevel) {
+	public static int qrCodeBytesCapacity(Version version, ErrorCorrectionLevel ecLevel) {
 		// partial copy&paste from com.google.zxing.qrcode.encoder.Encoder.willFit() ... but return max value, instead of boolean if value exceed max
 		// In the following comments, we use numbers of Version 7-H.
 		// numBytes = 196

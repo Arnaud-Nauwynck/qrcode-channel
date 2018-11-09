@@ -19,15 +19,15 @@ import com.google.zxing.qrcode.decoder.Version;
 
 import fr.an.qrcode.channel.impl.QRCodeUtils;
 import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
+import fr.an.qrcode.channel.impl.QREncodeSetting;
 
 public class QRCodesEncoderChannel {
 
 	private static final Logger LOG = LoggerFactory.getLogger(QRCodesEncoderChannel.class);
 	
-	private static int ESTIM_HEADER_LEN = 50;
+	private static int ESTIM_HEADER_LEN = 22;
 	
 	private QREncodeSetting qrEncodeSettings;
-	private boolean encodeSha256Fragments = false;
 	
 	private int fragmentSequenceNumber = 0; // (sequence number generator)
 
@@ -47,8 +47,8 @@ public class QRCodesEncoderChannel {
 	
 	public void appendFragmentsFor(String textContent) {
 		Version qrVersion = Version.getVersionForNumber(qrEncodeSettings.getQrVersion());
-		int maxBits = QRCodeUtils.qrCodeBitsCapacity(qrVersion, qrEncodeSettings.getErrorCorrectionLevel());
-		int maxChars = maxBits/8 - ESTIM_HEADER_LEN;
+		int bytesCapacity = QRCodeUtils.qrCodeBytesCapacity(qrVersion, qrEncodeSettings.getErrorCorrectionLevel());
+		int maxChars = bytesCapacity - ESTIM_HEADER_LEN;
 		
 		maxChars = Math.max(10, maxChars);
 		LOG.info("splitting " + maxChars  + " (" + (maxChars + ESTIM_HEADER_LEN) + ") chars");
@@ -74,10 +74,6 @@ public class QRCodesEncoderChannel {
 			long crc32 = QRCodecChannelUtils.crc32(splitText);
 
 			String header = fragSeqNumber + " " + crc32;
-			if (encodeSha256Fragments) {
-				String checkSha256 = QRCodecChannelUtils.sha256(splitText);
-				header += " SHA=" + checkSha256;
-	    	}
 	    	
 			header += "\n";
 			QRCodeEncodedFragment frag = new QRCodeEncodedFragment(this, fragSeqNumber, header, splitText);

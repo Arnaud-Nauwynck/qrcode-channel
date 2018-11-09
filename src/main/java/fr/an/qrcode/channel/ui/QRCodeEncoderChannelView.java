@@ -22,8 +22,9 @@ import javax.swing.JToolBar;
 
 import org.apache.commons.io.FileUtils;
 
+import fr.an.qrcode.channel.impl.QREncodeSetting;
 import fr.an.qrcode.channel.impl.encode.FragmentImg;
-import fr.an.qrcode.channel.impl.encode.QREncodeSetting;
+import fr.an.qrcode.channel.impl.encode.QRCodeEncodedFragment;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
 
 /**
@@ -59,6 +60,11 @@ public class QRCodeEncoderChannelView {
     
     private ImageCanvas qrCodeImageCanvas;
 
+    private JToolBar qrDetailPanel;
+    private JTextField qrDetailHeaderText;
+    private JTextField qrDetailDataText;
+    // private JTextField qrDetailDuplexMetadataText;
+    
     
     // ------------------------------------------------------------------------
 
@@ -169,6 +175,18 @@ public class QRCodeEncoderChannelView {
             QREncodeSetting qrSettings = model.getEncodeSetting();
             qrCodeImageCanvas.setPreferredSize(new Dimension(zoom*qrSettings.getQrCodeW(), zoom*qrSettings.getQrCodeH()));
             playerTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
+
+
+            qrDetailPanel = new JToolBar();
+            qrDetailPanel.add(new JLabel("data:"));
+            qrDetailHeaderText = new JTextField();
+            qrDetailPanel.add(qrDetailHeaderText);
+            qrDetailDataText = new JTextField();
+            qrDetailPanel.add(qrDetailDataText);
+//            qrDetailDuplexMetadataText = new JTextField();
+//            qrDetailPanel.add(qrDetailDuplexMetadataText);
+            
+            playerTabPanel.add(qrDetailPanel, BorderLayout.SOUTH);
         }
 
         tabbedPane.add("input", inputTabPanel);
@@ -221,6 +239,8 @@ public class QRCodeEncoderChannelView {
         // imageSizeField.setText(model.getQrCodeW() + "," + model.getQrCodeH());
     	
     	FragmentImg fragImg = model.getCurrentDisplayFragment();
+        QRCodeEncodedFragment frag = fragImg != null? fragImg.owner : null;
+        
         String fragId = fragImg != null? "" + fragImg.getFragmentNumber() : "";
         qrCodeNumberField.setText(fragId);
         
@@ -234,6 +254,9 @@ public class QRCodeEncoderChannelView {
         qrCodeImageCanvas.setImage(img);
         
         qrCodeImageCanvas.repaint();
+        
+        qrDetailHeaderText.setText(frag != null? "" + frag.getHeader().length() + " " + frag.getHeader(): "");
+        qrDetailDataText.setText(frag != null? "" + frag.getData().length() + " " + frag.getData(): "");
     }
 
 }

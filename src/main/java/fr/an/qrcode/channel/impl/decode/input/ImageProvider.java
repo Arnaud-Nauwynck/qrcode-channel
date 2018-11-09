@@ -1,5 +1,6 @@
 package fr.an.qrcode.channel.impl.decode.input;
 
+import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
@@ -19,4 +20,8 @@ public abstract class ImageProvider {
 		this.recordArea = r;
 	}
 
+	public Dimension getSize() {
+		return recordArea.getSize();
+	}
+	
 }

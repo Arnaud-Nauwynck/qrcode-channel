@@ -3,7 +3,7 @@ package fr.an.qrcode.channel;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
-import fr.an.qrcode.channel.impl.encode.QREncodeSetting;
+import fr.an.qrcode.channel.impl.QREncodeSetting;
 import fr.an.qrcode.channel.ui.QRCodeEncoderChannelModel;
 import fr.an.qrcode.channel.ui.QRCodeEncoderChannelView;
 

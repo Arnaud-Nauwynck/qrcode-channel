@@ -1,5 +1,6 @@
 package fr.an.qrcode.channel.impl.decode.filter;
 
+import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,7 +51,8 @@ public class ImageStreamProvider {
     
     private void takeSnapshotsLoop() {
     	listenSnapshotsRunning.set(true);
-    	imageStreamCallback.onStart();
+    	Dimension dim = imageProvider.getSize();
+    	imageStreamCallback.onStart(dim);
     	try {
 	    	for(;;) {
 		    	if (stopListenSnapshotsRequested.get()) {
