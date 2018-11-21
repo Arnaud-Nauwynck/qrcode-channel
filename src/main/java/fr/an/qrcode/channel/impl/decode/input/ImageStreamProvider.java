@@ -1,6 +1,5 @@
-package fr.an.qrcode.channel.impl.decode.filter;
+package fr.an.qrcode.channel.impl.decode.input;
 
-import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -9,8 +8,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
 
 public class ImageStreamProvider {
 
@@ -36,8 +33,13 @@ public class ImageStreamProvider {
 	
     public void takeSnapshot() {
     	snapshotExecutor.submit(() -> {
-    		// TODO ... take ~5 consecutive snapshots, then average sub-sampling
-    		doCaptureImage();	
+    		imageProvider.open();
+    		try {
+	    		// TODO ... take ~5 consecutive snapshots, then average sub-sampling
+	    		doCaptureImage();	
+    		} finally {
+    			imageProvider.close();
+    		}
     	});
     }
 
@@ -51,16 +53,30 @@ public class ImageStreamProvider {
     
     private void takeSnapshotsLoop() {
     	listenSnapshotsRunning.set(true);
-    	Dimension dim = imageProvider.getSize();
-    	imageStreamCallback.onStart(dim);
     	try {
+    		imageProvider.open();
+    		
+    		imageStreamCallback.onStart(imageProvider.getSize());
+    		
 	    	for(;;) {
 		    	if (stopListenSnapshotsRequested.get()) {
 		    		break;
 		    	}
 		    	long nanosBefore = System.nanoTime();
 		    	
-		    	doCaptureImage();
+		    	try {
+		    		doCaptureImage();
+		    	} catch(Exception ex) {
+		    		log.warn("failed to capture image " + ex.getMessage());
+		    		// Failed to capture image??
+			    	try {
+						Thread.sleep(10);
+					} catch (InterruptedException e) {
+					}
+			    	imageProvider.close();
+			    	imageProvider.open();
+			    	continue;
+		    	}
 		    	
 	    		long nanosAfter = System.nanoTime();
 	    		long millis = TimeUnit.NANOSECONDS.toMillis(nanosAfter - nanosBefore); 
@@ -73,10 +89,12 @@ public class ImageStreamProvider {
 	    		}
 	    	}
     	} catch(Exception ex) {
-    		log.error("Failed");
+    		log.error("Failed .. stopping loop");
+    	} finally {
+    		imageProvider.close();
+    		listenSnapshotsRunning.set(false);
+    		imageStreamCallback.onEnd();
     	}
-		listenSnapshotsRunning.set(false);
-    	imageStreamCallback.onEnd();
     }
     
     public void stopListenSnapshots() {
@@ -98,8 +116,11 @@ public class ImageStreamProvider {
 		}
 
 		// this.lastImage = img;
-		
-		imageStreamCallback.onImage(img, nanosBefore, nanos);
+		try {
+			imageStreamCallback.onImage(img, nanosBefore, nanos);
+		} catch(Exception ex) {
+			log.error("Failed to handle captured img", ex);
+		}
     }
 
 	public ImageProvider getImageProvider() {

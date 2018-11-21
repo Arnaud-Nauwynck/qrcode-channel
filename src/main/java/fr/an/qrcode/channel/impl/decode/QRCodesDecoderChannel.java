@@ -1,7 +1,6 @@
 package fr.an.qrcode.channel.impl.decode;
 
 import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -11,57 +10,35 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.zxing.BinaryBitmap;
 import com.google.zxing.DecodeHintType;
-import com.google.zxing.NotFoundException;
-import com.google.zxing.Result;
-import com.google.zxing.qrcode.QRCodeReader;
 
 import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
-import fr.an.qrcode.channel.impl.decode.filter.BinaryImageStreamCallback;
-import fr.an.qrcode.channel.impl.decode.filter.ImageStreamProvider;
-import fr.an.qrcode.channel.impl.decode.filter.SubSamplingDelegateImageStreamCallback;
+import fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent;
+import fr.an.qrcode.channel.impl.decode.filter.QRDecodeRollingStats;
+import fr.an.qrcode.channel.impl.decode.filter.QRDecodeRollingStats.Bucket;
+import fr.an.qrcode.channel.impl.decode.filter.QRStreamCallback;
+import fr.an.qrcode.channel.impl.decode.filter.ZBarQRStreamFromImageStreamCallback;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
+import fr.an.qrcode.channel.impl.decode.input.ImageStreamCallback;
+import fr.an.qrcode.channel.impl.decode.input.ImageStreamProvider;
 
 public class QRCodesDecoderChannel {
 
 	private static final Logger log = LoggerFactory.getLogger(QRCodesDecoderChannel.class);
 
-	private Map<DecodeHintType, Object> qrHints;
-	
-	private String readyText = "";
-	
-	private int nextSequenceNumber = 0;
-	
-	private Map<Integer,QRCodeDecodedFragment> aheadFragments = new LinkedHashMap<>();
-	
     private ImageStreamProvider imageStreamProvider;
     
-    private BinaryImageStreamCallback innerImageStreamCallback = new BinaryImageStreamCallback() {
-		@Override
-		public void onImage(BufferedImage img, BinaryBitmap bitmap, long nanosTime, long nanos) {
-			try {
-				onStream_handleBitmap(img, bitmap, nanosTime, nanos);
-			} catch(Exception ex) {
-				log.warn("Failed to handle image", ex);
-			}
-		}
-		@Override
-		public void onDropImage(BufferedImage img, long nanosTime, long nanos) {
-			// do nothing?
-		}
-    };
-
-    private QRCodeReader qrCodeReader = new QRCodeReader();
-
-	private BufferedImage currentImg;
-	private BinaryBitmap currentBitmap;
-	
-    private QRPacketResult currentSnapshotResult;
-
-
+    private ImageStreamCallback qrStreamFromImageStream;
     
-	// no need to have several listeners
+    private QRStreamCallback innerQRStreamCallback = new InnerQRStreamCallback();
+
+    private String currDecodeMsg;
+	private int nextSequenceNumber = 1;
+	private Map<Integer,QRCodeDecodedFragment> aheadFragments = new LinkedHashMap<>();
+
+	private String readyText = "";
+	
+    // emit 
 	private DecoderChannelListener eventListener;
 	
 	
@@ -71,17 +48,20 @@ public class QRCodesDecoderChannel {
 			Map<DecodeHintType, Object> qrHints, 
 			ImageProvider imageProvider, 
 			DecoderChannelListener eventListener) {
-		this.qrHints = qrHints;
 		int samplingLen = 3;
-		SubSamplingDelegateImageStreamCallback imageToBitmapFilter = new SubSamplingDelegateImageStreamCallback(innerImageStreamCallback, samplingLen);
-		this.imageStreamProvider = new ImageStreamProvider(imageProvider, imageToBitmapFilter);
 		this.eventListener = eventListener;
+		this.qrStreamFromImageStream = // new ZXingQRStreamFromImageStreamCallback(innerQRStreamCallback, samplingLen, qrHints);
+				new ZBarQRStreamFromImageStreamCallback(innerQRStreamCallback, samplingLen);
+		this.imageStreamProvider = new ImageStreamProvider(imageProvider, qrStreamFromImageStream);
+		log.info("ctor QRCodesDecoderChannel");
 	}
 
 	// ------------------------------------------------------------------------
 
 	public void startListenSnapshots() {
+		// qrStreamFromImageStream.onStart();
 		imageStreamProvider.startListenSnapshots();
+		
 	}
 	
 	public void stopListenSnapshots() {
@@ -92,83 +72,44 @@ public class QRCodesDecoderChannel {
 		imageStreamProvider.takeSnapshot();
 	}
 
-	
-	public static class QRPacketResult {
-		public String decodeMsg;
-		public int channelSequenceNumber;
+
+    
+	protected class InnerQRStreamCallback extends QRStreamCallback {
 		
-		public Result qrResult;
-		public int fragmentSequenceNumber;
-		public String text;
-		
-		public long nanosCompute;
+		@Override
+		public void onQRCaptured(QRCapturedEvent event) {
+			if (event.qrResults != null) {
+				for(QRResult qrResult : event.qrResults) {
+					String headerAndData = qrResult.text;
+			    	handleFragmentHeaderAndData(headerAndData);
+				}
+			}
+			
+	    	fireDecoderChannelEvent(event);
+		}
+
 	}
 	
-	protected void onStream_handleBitmap(BufferedImage img, 
-			BinaryBitmap bitmap, long captureNanosTime, long captureNanos) {
-		this.currentImg = img;
-		this.currentBitmap = bitmap;
-		
-		long nanosComputeBefore = System.nanoTime();
-		
-        QRPacketResult snapshotResult = computeQRPacketResult(bitmap);
-
-        long nanosCompute = System.nanoTime() - nanosComputeBefore;
-		        
-        snapshotResult.nanosCompute = nanosCompute;
-        eventListener.onEvent(new DecoderChannelEvent(img, captureNanosTime, captureNanos,
-        		bitmap, 
-        		snapshotResult, nanosComputeBefore, nanosCompute,
-        		readyText));
-	}  
-    
-	public QRPacketResult computeQRPacketResult(BinaryBitmap bitmap) {
-		QRPacketResult res = new QRPacketResult();
-       
-        Result qrResult;
-        try {
-        	qrResult = qrCodeReader.decode(bitmap, qrHints);
-        } catch(NotFoundException ex) {
-        	res.decodeMsg = "no qr code found";
-            return res;
-        } catch(com.google.zxing.ChecksumException ex) {
-        	res.decodeMsg = "\n<<<<<<<< FAILED to decode QRCode: ChecksumException >>>>>>>>>>>>\n";
-            return res;
-        } catch(com.google.zxing.FormatException ex) {
-        	res.decodeMsg = "\n<<<<<<<< FAILED to decode QRCode: FormatException >>>>>>>>>>>>\n";
-            return res;
-        }
-        
-        if (qrResult == null) {
-        	res.decodeMsg = "no result";
-        	return res;
-        }
-        	
-    	String headerAndData = qrResult.getText();
-    	handleFragmentHeaderAndData(res, headerAndData);
-    
-    	res.channelSequenceNumber = nextSequenceNumber;
-        return res;
-	}
-
-
-
-
 	
 	
     private static final Pattern fragmentHeaderPattern = Pattern.compile("([0-9\\.]*) ([0-9]+)");
     
-    protected void handleFragmentHeaderAndData(QRPacketResult res, String headerAndData) {
+    // TODO synchronized ??!!!!!!
+    protected synchronized void handleFragmentHeaderAndData(String headerAndData) {
+    	// long nanosBefore = System.nanoTime(); 
+    	Bucket bucketStats = getRollingStats().checkRoll();
     	int lineSep = headerAndData.indexOf("\n");
     	if (lineSep == -1) {
-    		res.decodeMsg = "header line break not found";
+    		currDecodeMsg = "header line break not found";
+			bucketStats.incrCountQRPacketProtocolError();
     		return;
     	}
     	String header = headerAndData.substring(0, lineSep);
     	String data = headerAndData.substring(lineSep+1, headerAndData.length());
     	Matcher headerMatcher = fragmentHeaderPattern.matcher(header);
     	if (! headerMatcher.matches()) {
-    		res.decodeMsg = "header not recognised: " + header;
+    		currDecodeMsg = "header not recognised: " + header;
+    		bucketStats.incrCountQRPacketProtocolError();
     		return;
     	}
     	String fragId = headerMatcher.group(1);
@@ -176,36 +117,37 @@ public class QRCodesDecoderChannel {
     	
     	if (fragSeqNumber < nextSequenceNumber) {
 			// drop already seen/handled fragment .. do nothing!
-			res.decodeMsg = "dropped past fragment (" + fragId + ")";
+			currDecodeMsg = "dropped past fragment (" + fragId + ")";
+			bucketStats.incrCountQRPacketRecognizedDuplicate();
 			return;
     	}
     	
     	long crc32 = Long.parseLong(headerMatcher.group(2));
     	long checkCrc32 = QRCodecChannelUtils.crc32(data);
     	if (checkCrc32 != crc32) {
-    		res.decodeMsg = "corrupted data: crc32 differs for fragId:" + fragId;
+    		currDecodeMsg = "corrupted data: crc32 differs for fragId:" + fragId;
+    		bucketStats.incrCountQRPacketChecksumException();
     		return;
     	}
     	
     	// ok, got id + data...
-		res.fragmentSequenceNumber = fragSeqNumber;
-		res.text = data;
     	
 		// check if fragment is next one expected in sequence
 		if (nextSequenceNumber == fragSeqNumber) {
 			readyText += data;
-			res.decodeMsg = "OK recognised fragment (" + fragSeqNumber + ")";
+			currDecodeMsg = "OK recognised fragment (" + fragSeqNumber + ")";
 			nextSequenceNumber++;
+			// bucketStats.incrCountQRPacketRecognized();
 			
 			// then check ahead fragments
 			int seqNumberBeforeUsedAheadFrags = nextSequenceNumber;
 			for(;;) {
 				boolean foundNextFrag = false;
 				for(Iterator<QRCodeDecodedFragment> nextFragIter = aheadFragments.values().iterator(); nextFragIter.hasNext(); ) {
-					QRCodeDecodedFragment nextFrag = nextFragIter.next();
-					int nextFragNumber = nextFrag.getFragmentNumber();
+					QRCodeDecodedFragment frag = nextFragIter.next();
+					int nextFragNumber = frag.getFragmentNumber();
 					if (nextFragNumber == nextSequenceNumber) {
-						readyText += nextFrag.getData();
+						readyText += frag.getData();
 						nextSequenceNumber++;
 						
 						foundNextFrag = true;
@@ -217,38 +159,37 @@ public class QRCodesDecoderChannel {
 				}
 			}
 			if (nextSequenceNumber > seqNumberBeforeUsedAheadFrags) {
-				res.decodeMsg += ", then use ahead frag(s), expecting " + nextSequenceNumber; 
+				currDecodeMsg += ", then use ahead frag(s), expecting " + nextSequenceNumber; 
 			}
 			
 		} else {
 			// push ahead fragment (if not already pushed)
-			if (aheadFragments.get(fragSeqNumber) == null) {
+			if (fragSeqNumber > nextSequenceNumber && aheadFragments.get(fragSeqNumber) == null) {
 				QRCodeDecodedFragment frag = new QRCodeDecodedFragment(this, fragSeqNumber, header, data);
 				aheadFragments.put(fragSeqNumber, frag);
-				res.decodeMsg = "pushed ahead fragment (" + fragSeqNumber + ")";
+				currDecodeMsg = "pushed ahead fragment (" + fragSeqNumber + ")";
+				// bucketStats.incrCountQRPacketRecognized();
 			} else {
-				res.decodeMsg = "dropped already pushed ahead fragment (" + fragSeqNumber + ")";
+				currDecodeMsg = "dropped already pushed ahead fragment (" + fragSeqNumber + ")";
+				bucketStats.incrCountQRPacketRecognizedDuplicate();
 			}
 		}
+		
+    	// long computeNanos = System.nanoTime() - nanosBefore; 
     }
 
+    protected void fireDecoderChannelEvent(QRCapturedEvent event) {
+    	eventListener.onEvent(new DecoderChannelEvent(
+    			currDecodeMsg,
+    			readyText,
+    			event));
+    }
+    
     // ------------------------------------------------------------------------
     
-	public int getChannelSequenceNumber() {
+	public int getNextSequenceNumber() {
 		return nextSequenceNumber;
 	}
-	
-	public BufferedImage getCurrentImg() {
-		return currentImg;
-	}
-
-	public BinaryBitmap getBitmap() {
-		return currentBitmap;
-	}
-
-    public QRPacketResult getCurrentSnapshotResult() {
-    	return currentSnapshotResult;
-    }
 
 	public String getReadyText() {
 		return readyText;
@@ -278,4 +219,17 @@ public class QRCodesDecoderChannel {
 		imageStreamProvider.getImageProvider().setRecordArea(r);
 	}
 
+	
+	public String getRecognitionStatsText() {
+		return getRollingStats().getRecognitionStatsText();
+	}
+
+	private QRDecodeRollingStats getRollingStats() {
+		return qrStreamFromImageStream.getRollingStats();
+	}
+
+	public ImageStreamCallback getQRStreamFromImageStream() {
+		return qrStreamFromImageStream;
+	}
+	
 }

@@ -77,7 +77,12 @@ public class QRCodeEncoderChannelView {
     // ------------------------------------------------------------------------
 
 	private void onModelPropChangeEvent(PropertyChangeEvent evt) {
-		model2view();
+		if (evt.getPropertyName().equals("text")) {
+			inputTextArea.setText(model.getText());
+			model2view();
+		} else {
+			model2view();
+		}
 	}
 
 	public JComponent getJComponent() {
@@ -173,7 +178,7 @@ public class QRCodeEncoderChannelView {
             qrCodeImageCanvas = new ImageCanvas();
             int zoom = 2;
             QREncodeSetting qrSettings = model.getEncodeSetting();
-            qrCodeImageCanvas.setPreferredSize(new Dimension(zoom*qrSettings.getQrCodeW(), zoom*qrSettings.getQrCodeH()));
+            // qrCodeImageCanvas.setPreferredSize(new Dimension(zoom*qrSettings.getQrCodeW(), zoom*qrSettings.getQrCodeH()));
             playerTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
 
 

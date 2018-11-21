@@ -8,6 +8,7 @@ import java.awt.image.DataBufferInt;
 import java.awt.image.WritableRaster;
 import java.util.zip.CRC32;
 
+import fr.an.qrcode.channel.impl.util.DimInt2D;
 import fr.an.qrcode.channel.ui.utils.DesktopScreenSnaphotProvider;
 
 public class DesktopScreenshotImageProvider extends ImageProvider { 
@@ -15,6 +16,19 @@ public class DesktopScreenshotImageProvider extends ImageProvider {
 	private DesktopScreenSnaphotProvider screenSnaphostProvider = new DesktopScreenSnaphotProvider(false, true);
 
     private long currentScreenshotImgCrc32;
+    
+	@Override
+	public void open() {
+	}
+
+	@Override
+	public void close() {
+	}
+
+	@Override
+	public DimInt2D getSize() {
+		return new DimInt2D(recordArea.width, recordArea.height);
+	}
 
 	@Override
 	public BufferedImage captureImage() {
@@ -28,8 +42,7 @@ public class DesktopScreenshotImageProvider extends ImageProvider {
         	return null; // exact same screenshot ..ignore
         }
         this.currentScreenshotImgCrc32 = imgCrc32;
-
-		return tmpres;
+        return tmpres;
 	}
 
 	@Override

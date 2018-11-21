@@ -1,5 +1,7 @@
 package fr.an.qrcode.channel;
 
+import java.awt.Rectangle;
+
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
@@ -32,6 +34,8 @@ public class QRCodeChannelDecoderApp {
                 frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
                 frame.pack();
                 frame.setVisible(true);
+                
+                frame.setBounds(new Rectangle(0, 50, 920, 1000));
             }
         });
     }

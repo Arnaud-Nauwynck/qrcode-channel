@@ -2,7 +2,9 @@ package fr.an.qrcode.channel.ui;
 
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeListener;
-import java.util.List;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,11 +40,11 @@ public class QRCodeEncoderChannelModel {
     private ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
     protected AtomicBoolean displayLoopRunning = new AtomicBoolean(false);
     protected AtomicBoolean displayLoopStopRequested = new AtomicBoolean(false);
-	protected long millisBetweenImg = 60;
+	protected long millisBetweenImg = 150;
 	protected boolean hideFragmentAfterPlay = true;
 	
 	// computed imgs
-	protected List<FragmentImg> fragmentImgs; 
+	protected Map<Integer,FragmentImg> fragmentImgs; 
 	
     // ------------------------------------------------------------------------
 
@@ -84,8 +86,31 @@ public class QRCodeEncoderChannelModel {
     }
     
     protected void runPlayThread() {
-    	List<FragmentImg> fragmentImgs = encoderChannel.getFragmentImgs();
-		for(FragmentImg fragImg : fragmentImgs) {
+    	Collection<FragmentImg> fragmentImgs = encoderChannel.getFragmentImgs().values();
+    	
+    	// first 3.. to autocalibrate webcam brightness..
+    	int firstPreview = 10;
+    	int index = 0;
+    	for (Iterator<FragmentImg> iterator = fragmentImgs.iterator(); iterator.hasNext();) {
+			FragmentImg fragImg = iterator.next();
+			index++;
+			if (index >= firstPreview) {
+				break;
+			}
+			
+    		try {
+	    		SwingUtilities.invokeAndWait(() -> {
+					setCurrentDisplayFragment(fragImg);
+				});
+			} catch (Exception e) {
+			}
+			try {
+				Thread.sleep(millisBetweenImg);
+			} catch (InterruptedException e) {
+			}
+		}
+    	
+    	for(FragmentImg fragImg : fragmentImgs) {
 			if (fragImg.isAcknowledge()) {
 				continue;
 			}
@@ -134,7 +159,7 @@ public class QRCodeEncoderChannelModel {
     	if (fragmentImgs != null && currDisplayIndex-1 >= 0) {
 			while(currDisplayIndex > 0) {
 				FragmentImg fragImg = fragmentImgs.get(--currDisplayIndex);
-	    		if (fragImg.isAcknowledge()) {
+	    		if (fragImg == null || fragImg.isAcknowledge()) {
 					continue;
 				}
 	    		setCurrentDisplayFragment(fragImg);
@@ -169,12 +194,13 @@ public class QRCodeEncoderChannelModel {
 	}
 	
     private void addAcknowledgeFrag(int fragNum) {
-    	for(FragmentImg frag : fragmentImgs) {
-    		if (frag.getFragmentNumber() == fragNum && !frag.isAcknowledge()) {
-    			frag.acknowledge();
-    			break;
-    		}
-    	}
+    	fragmentImgs.remove(fragNum);
+//    	for(FragmentImg frag : fragmentImgs.values()) {
+//    		if (frag.getFragmentNumber() == fragNum && !frag.isAcknowledge()) {
+//    			frag.acknowledge();
+//    			break;
+//    		}
+//    	}
 	}
     
     
@@ -229,7 +255,7 @@ public class QRCodeEncoderChannelModel {
 		StringBuilder sb = new StringBuilder();
         int countNoAck = 0, minNoAck = Integer.MAX_VALUE, maxNoAck = -1;
         if (fragmentImgs != null) {
-        	for(FragmentImg frag : fragmentImgs) {
+        	for(FragmentImg frag : fragmentImgs.values()) {
         		if (! frag.isAcknowledge()) {
         			countNoAck++;
         			minNoAck = Math.min(minNoAck, frag.getFragmentNumber());

@@ -3,6 +3,7 @@ package fr.an.qrcode.channel.impl;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.google.zxing.BarcodeFormat;
 import com.google.zxing.DecodeHintType;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.google.zxing.qrcode.decoder.Version;
@@ -34,6 +35,10 @@ public class QRCodeUtils {
     public static Map<DecodeHintType, Object> createDefaultDecoderHints() {
     	Map<DecodeHintType, Object>  qrHints = new HashMap<>();
         qrHints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
+        
+        qrHints.put(DecodeHintType.POSSIBLE_FORMATS, BarcodeFormat.QR_CODE);
+        // ? qrHints.put(DecodeHintType.ALLOWED_LENGTHS
+        
 //        qrHints.put(DecodeHintType.PURE_BARCODE, Boolean.TRUE);
         return qrHints;
     }

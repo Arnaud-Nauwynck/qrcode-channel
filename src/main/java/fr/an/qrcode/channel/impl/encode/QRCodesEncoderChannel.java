@@ -29,7 +29,7 @@ public class QRCodesEncoderChannel {
 	
 	private QREncodeSetting qrEncodeSettings;
 	
-	private int fragmentSequenceNumber = 0; // (sequence number generator)
+	private int fragmentSequenceNumber = 1; // (sequence number generator)
 
 	private Map<Integer,QRCodeEncodedFragment> fragments = new LinkedHashMap<>();
 	
@@ -100,10 +100,10 @@ public class QRCodesEncoderChannel {
 	    return image;
 	}
  
-	public List<FragmentImg> getFragmentImgs() {
-		List<FragmentImg> res = new ArrayList<>();
+	public Map<Integer,FragmentImg> getFragmentImgs() {
+		Map<Integer,FragmentImg> res = new LinkedHashMap<>();
 		for(QRCodeEncodedFragment frag : fragments.values()) {
-			res.add(frag.getFragmentImg());
+			res.put(frag.getFragmentNumber(), frag.getFragmentImg());
 		}
 		return res;
 	}

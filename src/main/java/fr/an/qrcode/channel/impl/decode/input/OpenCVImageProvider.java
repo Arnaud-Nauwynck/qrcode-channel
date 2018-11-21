@@ -1,0 +1,96 @@
+package fr.an.qrcode.channel.impl.decode.input;
+
+import java.awt.image.BufferedImage;
+
+import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.FrameGrabber;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import fr.an.qrcode.channel.impl.QROpenCvUtils;
+import fr.an.qrcode.channel.impl.util.DimInt2D;
+
+
+public class OpenCVImageProvider extends ImageProvider {
+
+	private static final Logger log = LoggerFactory.getLogger(OpenCVImageProvider.class);
+
+	private FrameGrabber frameGrabber;
+
+	// --------------------------------------------------------------------------------------------
+	
+	public OpenCVImageProvider(FrameGrabber frameGrabber) {
+		this.frameGrabber = frameGrabber;
+		log.info("create OpenCVImageProvider with " + frameGrabber);
+	}
+
+	static {
+		FrameGrabber.init();
+	}
+	
+	public static OpenCVImageProvider createDefault() {
+		FrameGrabber frameGrabber;
+		try {
+			// frameGrabber = new FFmpegFrameGrabber("/dev/video0");
+			// frameGrabber.setFormat("video4linux2");
+			frameGrabber = FrameGrabber.createDefault(0);
+			// 640x480 ???
+	        frameGrabber.setImageWidth(1280);
+	        frameGrabber.setImageHeight(720);
+	        // frameGrabber.setImageMode(ImageMode.GRAY);
+		} catch (Exception ex) {
+			throw new IllegalStateException("Failed to detect webcam", ex);
+		}
+
+		return new OpenCVImageProvider(frameGrabber);
+	}
+
+	// --------------------------------------------------------------------------------------------
+	
+	@Override
+	public void open() {
+		log.info("webcam.open..");
+		try {
+			frameGrabber.start();
+		} catch(Exception ex) {
+			log.error("Failed frameGrabber.start()");
+			throw new RuntimeException("", ex);
+		}
+
+		BufferedImage checkImg = captureImage();
+		log.info("check capture image:" + checkImg.getWidth() + "x" + checkImg.getHeight());
+	}
+
+	@Override
+	public void close() {
+		log.info("webcam.close..");
+		try {
+			// frameGrabber.release();
+			frameGrabber.stop();
+		} catch(Exception ex) {
+			log.error("Failed frameGrabber.stop()");
+			throw new RuntimeException("Failed", ex);
+		}
+	}
+
+	@Override
+	public BufferedImage captureImage() {
+		try {
+			Frame frame = frameGrabber.grab();
+			return QROpenCvUtils.toBufferedImage(frame);
+		} catch(Exception ex) {
+			throw new RuntimeException("Failed", ex);
+		}
+	}
+
+	@Override
+	public void parseRecordParamsText(String recordParamsText) {
+		// TODO
+	}
+
+	@Override
+	public DimInt2D getSize() {
+		return new DimInt2D(frameGrabber.getImageWidth(), frameGrabber.getImageHeight());
+	}
+
+}

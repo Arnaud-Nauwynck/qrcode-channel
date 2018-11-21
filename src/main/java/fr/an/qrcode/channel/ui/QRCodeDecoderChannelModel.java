@@ -1,12 +1,10 @@
 package fr.an.qrcode.channel.ui;
 
-import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeListener;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.SwingUtilities;
 import javax.swing.event.SwingPropertyChangeSupport;
@@ -14,18 +12,17 @@ import javax.swing.event.SwingPropertyChangeSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.sarxos.webcam.Webcam;
-import com.github.sarxos.webcam.WebcamException;
-import com.github.sarxos.webcam.ds.openimaj.OpenImajDriver;
 import com.google.zxing.DecodeHintType;
 
 import fr.an.qrcode.channel.impl.QRCodeUtils;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel;
-import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.QRPacketResult;
+import fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent;
+import fr.an.qrcode.channel.impl.decode.input.AvgFilterImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.DesktopScreenshotImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
+import fr.an.qrcode.channel.impl.decode.input.OpenCVImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.WebcamImageProvider;
 
 /**
@@ -42,19 +39,27 @@ public class QRCodeDecoderChannelModel {
     private SwingPropertyChangeSupport pcs = new SwingPropertyChangeSupport(this);
     private DecoderChannelListener uiEventListener;
     
-    public static enum ImageProviderMode { DesktopScreenshot, WebCam };
-    ImageProviderMode imageProviderMode = ImageProviderMode.DesktopScreenshot;
+    public static enum ImageProviderMode { DesktopScreenshot, OpenCV, WebCam };
+    ImageProviderMode imageProviderMode =
+//    		ImageProviderMode.OpenCV;
+    		ImageProviderMode.WebCam;
+//    		ImageProviderMode.DesktopScreenshot;
     DesktopScreenshotImageProvider desktopImageProvider = new DesktopScreenshotImageProvider();
+    OpenCVImageProvider openCVImageProvider; // = new openCVImageProvider();
     WebcamImageProvider webcamImageProvider; // = new WebcamImageProvider();
         
     private Map<DecodeHintType, Object> qrDecoderHints = QRCodeUtils.createDefaultDecoderHints();
     
     private QRCodesDecoderChannel decoderChannel;
-    
+
     private String fullText = "";
     private BufferedImage currentScreenshotImg;
-    private QRPacketResult currentSnapshotResult;
+    private String currDecodeMsg;    
+    private String recognitionStatsText;
+    private QRCapturedEvent currQRCapturedEvent;
     
+	private AtomicBoolean pendingRefresh = new AtomicBoolean();
+
     // ------------------------------------------------------------------------
 
     public QRCodeDecoderChannelModel() {
@@ -68,9 +73,9 @@ public class QRCodeDecoderChannelModel {
     		log.info("reset");
     		this.decoderChannel.stopListenSnapshots();
     	}
-    	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints, createImageProvider(), e -> onDecoderChannelEvent(e));
+    	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints, 
+    			getImageProvider(), e -> onDecoderChannelEvent(e));
     	this.currentScreenshotImg = null;
-    	setCurrentSnapshotResult(null);
     	setFullText("");
     }
     
@@ -78,50 +83,30 @@ public class QRCodeDecoderChannelModel {
     	this.uiEventListener = uiEventListener; 
     }
     
-    protected ImageProvider createImageProvider() {
+    protected ImageProvider getImageProvider() {
     	switch(imageProviderMode) {
     	case DesktopScreenshot: return desktopImageProvider;
-    	case WebCam:return createWebcamImageProvider();
+    	case OpenCV: {
+    		if (openCVImageProvider == null) {
+    			openCVImageProvider = OpenCVImageProvider.createDefault();
+    		}
+    		return new AvgFilterImageProvider(openCVImageProvider);
+    	}
+    	case WebCam: {
+    		if (webcamImageProvider == null) {
+    			webcamImageProvider = WebcamImageProvider.createDefault();
+    		}
+    		return new AvgFilterImageProvider(webcamImageProvider);
+    	}
     	default: throw new IllegalStateException();
     	}
     }
 
-    protected ImageProvider createWebcamImageProvider() {
-		if (webcamImageProvider == null) {
-			Webcam.setDriver(new OpenImajDriver());
-			
-			Webcam webcam;
-			try {
-				webcam = Webcam.getDefault(10, TimeUnit.SECONDS);
-			} catch (WebcamException | TimeoutException ex) {
-				throw new IllegalStateException("Failed to detect webcam", ex);
-			}
-			if (webcam == null) {
-				throw new IllegalStateException("No detected webcam");
-			}
 
-			Dimension[] viewSizes = webcam.getViewSizes();
-			Dimension bestViewSize = viewSizes[0];
-			for(Dimension viewSize : viewSizes) {
-				if (viewSize.getHeight()*viewSize.getWidth() > bestViewSize.getHeight()*bestViewSize.getWidth()) {
-					bestViewSize = viewSize;
-				}
-			}
-			Dimension currViewSize = webcam.getViewSize();
-			if (currViewSize == null || ! currViewSize.equals(bestViewSize)) {
-				log.info("changing viewSize:" + currViewSize + " -> " + bestViewSize);
-				webcam.setViewSize(bestViewSize);
-			}
-			
-			Webcam.getDiscoveryService().stop(); // avoid useless re-discovery loop ???
-
-			webcamImageProvider = new WebcamImageProvider();
-
-			webcamImageProvider.init(webcam);
-		}
-		return webcamImageProvider;
-	}
-
+    public ImageProviderMode getImageProviderMode() {
+    	return imageProviderMode;
+    }
+    
 	public void setImageProviderMode(ImageProviderMode mode) {
 		if (mode != this.imageProviderMode) { 	
 			this.imageProviderMode = mode;
@@ -131,15 +116,29 @@ public class QRCodeDecoderChannelModel {
 
 	
     protected void onDecoderChannelEvent(DecoderChannelEvent event) {
-    	SwingUtilities.invokeLater(() -> {
-    		// startTime;
-    		// timeMillis;
-    		this.currentScreenshotImg = event.img;
-    		this.currentSnapshotResult = event.snapshotResult;
-    		this.fullText = event.readyText;
+    	if (! pendingRefresh.get()) {
+    		pendingRefresh.set(true);
+    		//? pendingRefresh.compareAndSet(false, true);
+    		this.currQRCapturedEvent = event.qrEvent;
     		
-    		uiEventListener.onEvent(event);
-    	});
+    		SwingUtilities.invokeLater(() -> {
+    			try {
+    				// this.nextSequenceNumber = this.decoderChannel.getNextSequenceNumber();
+    				// startTime;
+		    		// timeMillis;
+		    		this.currentScreenshotImg = event.qrEvent.image;
+		    		this.fullText = event.readyText;
+		    		
+		    		this.recognitionStatsText = decoderChannel.getRecognitionStatsText();
+		    		this.currDecodeMsg = event.currDecodeMsg;
+		    		
+		    		uiEventListener.onEvent(event);
+    			} catch(Exception ex) {
+    				log.error("Failed", ex);
+    			}
+	    		pendingRefresh.set(false);
+	    	});
+    	}
     }
     
     public void addPropertyChangeListener(PropertyChangeListener listener) {
@@ -150,8 +149,9 @@ public class QRCodeDecoderChannelModel {
 		pcs.removePropertyChangeListener(listener);
 	}
 
-    public int getChannelSequenceNumber() {
-        return this.decoderChannel.getChannelSequenceNumber();
+    public int getNextSequenceNumber() {
+        return // nextSequenceNumber
+        		this.decoderChannel.getNextSequenceNumber();
     }
 
     public String getFullText() {
@@ -164,16 +164,6 @@ public class QRCodeDecoderChannelModel {
         pcs.firePropertyChange("fullText", prev, p);
     }
 
-    public QRPacketResult getCurrentSnapshotResult() {
-		return currentSnapshotResult;
-	}
-
-	public void setCurrentSnapshotResult(QRPacketResult p) {
-		QRPacketResult prev = currentSnapshotResult; 
-		this.currentSnapshotResult = p;
-        pcs.firePropertyChange("currentSnapshotResult", prev, p);
-	}
-
 	public void setCurrentScreenshotImg(BufferedImage p) {
 		BufferedImage prev = currentScreenshotImg; 
 		this.currentScreenshotImg = p;
@@ -184,7 +174,14 @@ public class QRCodeDecoderChannelModel {
         return currentScreenshotImg;
     }
 
+	public String getRecognitionStatsText() {
+		return recognitionStatsText;
+	}
 
+	public QRCapturedEvent getCurrQRCapturedEvent() {
+		return currQRCapturedEvent;
+	}
+	
 	// delegate to decoderChannel 
 	// --------------------------------------------------------------------------------------------
 
@@ -220,5 +217,8 @@ public class QRCodeDecoderChannelModel {
 		decoderChannel.setRecordArea(r);
 	}
 
+	public String getCurrDecodeMsg() {
+		return currDecodeMsg;
+	}
 
 }
