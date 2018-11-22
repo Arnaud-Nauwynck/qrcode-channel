@@ -7,9 +7,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.bytedeco.javacpp.opencv_core;
-import org.bytedeco.javacpp.opencv_core.Mat;
-import org.bytedeco.javacpp.opencv_core.Size;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +57,7 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 
 	
 	Mat grayImg, grayImgThreshold, imgErode, imgMorpho, imgBinarize;
-	Mat kernel33 = Mat.ones(3, 3, opencv_core.CV_32F).asMat();
+	Mat kernel33 = Mat.ones(3, 3, CvType.CV_32F);
 	
 	private Map<DecodeHintType, Object> qrHints;
 	private Decoder decoder;
@@ -135,15 +135,15 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	public void onStart(DimInt2D dim) {
 		Size s = new Size(dim.w, dim.h);
 		// cvCreateImage(size, opencv_core.IPL_DEPTH_8U, 1);
-		grayImg = new Mat(s, opencv_core.CV_8UC1);  // CV_32SC1
-		grayImgThreshold = new Mat(s, opencv_core.CV_8UC1);
-		imgErode = new Mat(s, opencv_core.CV_8UC1);
-		imgMorpho = new Mat(s, opencv_core.CV_8UC1);
-		imgBinarize = new Mat(s, opencv_core.CV_8UC1);
+		grayImg = new Mat(s, CvType.CV_8UC1);  // CV_32SC1
+		grayImgThreshold = new Mat(s, CvType.CV_8UC1);
+		imgErode = new Mat(s, CvType.CV_8UC1);
+		imgMorpho = new Mat(s, CvType.CV_8UC1);
+		imgBinarize = new Mat(s, CvType.CV_8UC1);
 		
 		for(int i = 0; i < samplingLen; i++) {
 //			CvSive cvSive = new CvSive(w, h);
-//			IplImage img = cvCreateImage(cvSize, opencv_core.IPL_DEPTH_8U, 3);
+//			IplImage img = cvCreateImage(cvSize, CvType.IPL_DEPTH_8U, 3);
 			prevSamplings[i] = new ImageSampling(null);
 		}
 	

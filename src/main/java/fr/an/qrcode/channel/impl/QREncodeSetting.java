@@ -16,7 +16,8 @@ public class QREncodeSetting {
 //    		6;
 // 			7;
 //    		8;
-    		10;
+    		9;
+//    		10;
 //    		12;
 //    		15;
 // 			20;

@@ -22,7 +22,6 @@ import fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent;
 import fr.an.qrcode.channel.impl.decode.input.AvgFilterImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.DesktopScreenshotImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
-import fr.an.qrcode.channel.impl.decode.input.OpenCVImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.WebcamImageProvider;
 
 /**
@@ -45,7 +44,7 @@ public class QRCodeDecoderChannelModel {
     		ImageProviderMode.WebCam;
 //    		ImageProviderMode.DesktopScreenshot;
     DesktopScreenshotImageProvider desktopImageProvider = new DesktopScreenshotImageProvider();
-    OpenCVImageProvider openCVImageProvider; // = new openCVImageProvider();
+    // OpenCVImageProvider openCVImageProvider; // = new openCVImageProvider();
     WebcamImageProvider webcamImageProvider; // = new WebcamImageProvider();
         
     private Map<DecodeHintType, Object> qrDecoderHints = QRCodeUtils.createDefaultDecoderHints();
@@ -87,10 +86,11 @@ public class QRCodeDecoderChannelModel {
     	switch(imageProviderMode) {
     	case DesktopScreenshot: return desktopImageProvider;
     	case OpenCV: {
-    		if (openCVImageProvider == null) {
-    			openCVImageProvider = OpenCVImageProvider.createDefault();
-    		}
-    		return new AvgFilterImageProvider(openCVImageProvider);
+    		// TODO
+//    		if (openCVImageProvider == null) {
+//    			openCVImageProvider = OpenCVImageProvider.createDefault();
+//    		}
+//    		return new AvgFilterImageProvider(openCVImageProvider);
     	}
     	case WebCam: {
     		if (webcamImageProvider == null) {

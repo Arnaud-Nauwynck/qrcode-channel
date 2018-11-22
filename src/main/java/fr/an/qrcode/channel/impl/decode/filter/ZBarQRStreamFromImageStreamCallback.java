@@ -141,13 +141,12 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 		long nanosBefore = System.nanoTime();
 		
 		ImageScanner imageScanner = new ImageScanner();
-		imageScanner.enableCache(false);
+		imageScanner.enableCache(false); // ??
 		// imageScanner.setConfig(arg0, arg1, arg2);
 
 		Raster imgRaster = img.getData();
 		DataBufferByte imgBuffer = (DataBufferByte) imgRaster.getDataBuffer();
 		byte[] imgData = imgBuffer.getData();
-		int imgDataLen = imgData.length;
 		// convert RGB to Gray..
 		final int w = imgRaster.getWidth(), h = imgRaster.getHeight();  
 		for(int y = 0, i=0, gi=0; y < h; y++) {
@@ -167,6 +166,14 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 				// (306*R) >> 10 is approximately equal to R*0.299, and so on.
 				// 0x200 >> 10 is 0.5, it implements rounding.
 				int gray = (306 * r + 601 * g + 117 * b + 0x200) >> 10;
+
+				// threshold..
+				int threshold = 30;
+				if (gray < threshold) {
+					gray = 1;
+				} else if (gray > (255-threshold)) {
+					gray = 255;
+				}
 				
 				// TODO morphologic erode+dilate+downsize
 				imgGrayData[gi] = (byte) gray;

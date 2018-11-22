@@ -1,36 +1,37 @@
 package fr.an.qrcode.channel.impl;
 
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 
-import org.bytedeco.javacpp.opencv_core.IplImage;
-import org.bytedeco.javacv.Frame;
-import org.bytedeco.javacv.Java2DFrameConverter;
-import org.bytedeco.javacv.OpenCVFrameConverter;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+
 
 public class QROpenCvUtils {
 	
-	private static final OpenCVFrameConverter<IplImage> frameToIplImageConverter = new OpenCVFrameConverter.ToIplImage();
-	private static final Java2DFrameConverter java2dFrameConverter = new Java2DFrameConverter();
-
-	public static BufferedImage toBufferedImage(IplImage src) {
-		Frame frame = frameToIplImageConverter.convert(src);
-		return java2dFrameConverter.convert(frame);
+	public static Mat toMat(BufferedImage image) {
+		Mat mat = new Mat(image.getHeight(), image.getWidth(), CvType.CV_8UC3);
+		toMat(image, mat);
+	    return mat;
 	}
 
-	public static BufferedImage toBufferedImage(Frame src) {
-		return java2dFrameConverter.convert(src);
-	}
-
-	public static IplImage toIplImage(BufferedImage src) {
-		Frame frame = java2dFrameConverter.convert(src);
-		return frameToIplImageConverter.convert(frame);
+	public static void toMat(BufferedImage image, Mat dest) {
+		byte[] data = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+	    dest.put(0, 0, data);
 	}
 	
-	public static IplImage toIplImage(Frame src) {
-		return frameToIplImageConverter.convert(src);
+	public static BufferedImage toBufferedImage(Mat src, int imageType) {
+		final int w = src.cols(), h = src.rows();
+		BufferedImage dest = new BufferedImage(w, h, imageType);
+		toBufferedImage(src, dest);
+	    return dest;
 	}
-	
-	public static Frame toFrame(IplImage src) {
-		return frameToIplImageConverter.convert(src);
+
+	public static void toBufferedImage(Mat src, BufferedImage dest) {
+		final int w = src.cols(), h = src.rows();
+		byte[] data = new byte[h * w * (int)src.elemSize()];
+	    src.get(0, 0, data);
+	    dest.getRaster().setDataElements(0, 0, w, h, data);
 	}
+    
 }

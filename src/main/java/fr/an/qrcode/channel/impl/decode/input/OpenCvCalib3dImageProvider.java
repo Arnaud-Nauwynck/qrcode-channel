@@ -3,28 +3,27 @@ package fr.an.qrcode.channel.impl.decode.input;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
+import org.opencv.core.Core;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import fr.an.qrcode.channel.impl.util.DimInt2D;
 
 /**
- * an ImageProvider that delegate to underlying, to do the Average between current image and previous
- *
+ * 
  */
-public class AvgFilterImageProvider extends ImageProvider {
+public class OpenCvCalib3dImageProvider extends ImageProvider {
 	
-	private static final Logger log = LoggerFactory.getLogger(AvgFilterImageProvider.class);
+	private static final Logger log = LoggerFactory.getLogger(OpenCvCalib3dImageProvider.class);
 
 	private ImageProvider delegate;
-
-	private BufferedImage prevImg; 
-	private BufferedImage imgAvg; 
-
+	private OpenCvCalib3d calib;
+	
 	// --------------------------------------------------------------------------------------------
 	
-	public AvgFilterImageProvider(ImageProvider delegate) {
+	public OpenCvCalib3dImageProvider(ImageProvider delegate, OpenCvCalib3d calib) {
 		this.delegate = delegate;
+		this.calib = calib;
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -35,11 +34,6 @@ public class AvgFilterImageProvider extends ImageProvider {
 
 	public void open() {
 		delegate.open();
-		DimInt2D size = getSize();
-		log.info("allocating prev,avg img size:" + size);
-//		CvSize size = new CvSize(getSize().w, getSize().h);
-//		prevImg = cvCreateImage(size, IPL_DEPTH_8U, 3);
-//		imgAvg = cvCreateImage(size, IPL_DEPTH_8U, 3);
 	}
 
 	public void close() {
@@ -48,21 +42,15 @@ public class AvgFilterImageProvider extends ImageProvider {
 		
 	public BufferedImage captureImage() {
 		BufferedImage currImg = delegate.captureImage();
-//		if (prevImg == null) {
-//			opencv_core.cvCopy(currImg, prevImg);
-//			currImg = delegate.captureImage();
-//		}
-//		opencv_core.cvAddWeighted(prevImg, 1.0, currImg, 1.0, 0.0, imgAvg);
-//		opencv_core.cvCopy(currImg, prevImg);
-//		return imgAvg;
 		
 		// TODO camera distortion correction 
-		// https://opencv-java-tutorials.readthedocs.io/en/latest/09-camera-calibration.html
-			
+		// calib
+		
 		// TODO
 		return currImg;		
 	}
-	
+
+
 	public void parseRecordParamsText(String recordParamsText) {
 		delegate.parseRecordParamsText(recordParamsText);
 	}

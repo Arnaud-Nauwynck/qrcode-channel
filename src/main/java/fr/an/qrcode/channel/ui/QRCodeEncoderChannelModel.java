@@ -40,7 +40,7 @@ public class QRCodeEncoderChannelModel {
     private ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
     protected AtomicBoolean displayLoopRunning = new AtomicBoolean(false);
     protected AtomicBoolean displayLoopStopRequested = new AtomicBoolean(false);
-	protected long millisBetweenImg = 150;
+	protected long millisBetweenImg = 180;
 	protected boolean hideFragmentAfterPlay = true;
 	
 	// computed imgs

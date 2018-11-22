@@ -97,20 +97,12 @@
 		</dependency>
  -->
 
-	 	<dependency>
-	    	<groupId>org.bytedeco</groupId>
-	    	<artifactId>javacv-platform</artifactId>
-	    	<version>1.4.3</version>
-	  	</dependency>
-
-<!-- 
-	  	<dependency>
-		  <groupId>org.boofcv</groupId>
-		  <artifactId>boofcv-core</artifactId>
-		  <version>0.31</version>
+		<dependency>
+			<groupId>org.opencv</groupId>
+			<artifactId>opencv</artifactId>
+			<version>4.0</version>
 		</dependency>
- -->
-
+	
 
 		<dependency>
 		  <groupId>net.sourceforge.zbar</groupId>
