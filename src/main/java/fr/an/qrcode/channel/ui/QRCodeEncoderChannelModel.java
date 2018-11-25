@@ -2,8 +2,8 @@ package fr.an.qrcode.channel.ui;
 
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeListener;
-import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,11 +40,12 @@ public class QRCodeEncoderChannelModel {
     private ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
     protected AtomicBoolean displayLoopRunning = new AtomicBoolean(false);
     protected AtomicBoolean displayLoopStopRequested = new AtomicBoolean(false);
-	protected long millisBetweenImg = 180;
-	protected boolean hideFragmentAfterPlay = true;
+	protected long millisBetweenImg = 300;
 	
 	// computed imgs
 	protected Map<Integer,FragmentImg> fragmentImgs; 
+	
+	private int ackSeqNumber = 0;
 	
     // ------------------------------------------------------------------------
 
@@ -86,38 +87,23 @@ public class QRCodeEncoderChannelModel {
     }
     
     protected void runPlayThread() {
-    	Collection<FragmentImg> fragmentImgs = encoderChannel.getFragmentImgs().values();
+    	List<FragmentImg> fragmentImgs = encoderChannel.getNextFragmentImgs();
     	
     	// first 3.. to autocalibrate webcam brightness..
-    	int firstPreview = 10;
+    	int firstPreview = 15;
     	int index = 0;
     	for (Iterator<FragmentImg> iterator = fragmentImgs.iterator(); iterator.hasNext();) {
 			FragmentImg fragImg = iterator.next();
+			if (fragImg.isAcknowledge()) {
+				continue;
+			}
 			index++;
 			if (index >= firstPreview) {
 				break;
 			}
 			
     		try {
-	    		SwingUtilities.invokeAndWait(() -> {
-					setCurrentDisplayFragment(fragImg);
-				});
-			} catch (Exception e) {
-			}
-			try {
-				Thread.sleep(millisBetweenImg);
-			} catch (InterruptedException e) {
-			}
-		}
-    	
-    	for(FragmentImg fragImg : fragmentImgs) {
-			if (fragImg.isAcknowledge()) {
-				continue;
-			}
-			try {
-				SwingUtilities.invokeAndWait(() -> {
-					setCurrentDisplayFragment(fragImg);
-				});
+	    		SwingUtilities.invokeAndWait(() -> setCurrentDisplayFragment(fragImg));
 			} catch (Exception e) {
 			}
 			try {
@@ -128,9 +114,24 @@ public class QRCodeEncoderChannelModel {
 				break;
 			}
 		}
-    	if (hideFragmentAfterPlay) {
-    		setCurrentDisplayFragment(null);
-    	}
+    	
+    	for(FragmentImg fragImg : fragmentImgs) {
+			if (fragImg.isAcknowledge()) {
+				continue;
+			}
+			try {
+				SwingUtilities.invokeAndWait(() -> setCurrentDisplayFragment(fragImg));
+			} catch (Exception e) {
+			}
+			try {
+				Thread.sleep(millisBetweenImg);
+			} catch (InterruptedException e) {
+			}
+			if (displayLoopStopRequested.get()) {
+				break;
+			}
+		}
+
     	displayLoopRunning.set(false);
     }
     
@@ -150,6 +151,12 @@ public class QRCodeEncoderChannelModel {
     	}
     }
 
+	public void rewindToAck() {
+		// TODO
+	}
+
+
+	
 	public void onDisplayFrag(int n) {
 		this.currDisplayIndex = Math.max(0, Math.min(n, fragmentImgs.size()));
 		setCurrentDisplayFragment(fragmentImgs.get(currDisplayIndex));
@@ -193,14 +200,34 @@ public class QRCodeEncoderChannelModel {
 		pcs.firePropertyChange("fragmentImgs", null, fragmentImgs);
 	}
 	
+	public int getAckSeqNumber() {
+		return ackSeqNumber;
+	}
+	
+	public void setAckSeqNumber(int num) {
+		ackSeqNumber = num;
+
+    	for(FragmentImg frag : fragmentImgs.values()) {
+    		if (frag.getFragmentNumber() < num) {
+    			frag.acknowledge();
+    		}
+    	}
+		pcs.firePropertyChange("fragmentImgs", null, fragmentImgs);
+	}
+
+	public void incrAckSeqNumber(int count) {
+		setAckSeqNumber(ackSeqNumber + count);
+	}
+	
     private void addAcknowledgeFrag(int fragNum) {
-    	fragmentImgs.remove(fragNum);
-//    	for(FragmentImg frag : fragmentImgs.values()) {
-//    		if (frag.getFragmentNumber() == fragNum && !frag.isAcknowledge()) {
-//    			frag.acknowledge();
-//    			break;
-//    		}
-//    	}
+    	if (ackSeqNumber+1 == fragNum) {
+    		ackSeqNumber++;
+    	}
+    	
+    	FragmentImg frag = fragmentImgs.get(fragNum);
+    	if (frag != null) {
+			frag.acknowledge();
+    	}
 	}
     
     
@@ -226,8 +253,8 @@ public class QRCodeEncoderChannelModel {
 		return text;
 	}
 
-	public int getChannelSequenceNumber() {
-		return encoderChannel != null? encoderChannel.getFragmentSequenceNumber() : 0;
+	public int getChannelNextSequenceNumber() {
+		return encoderChannel != null? encoderChannel.getNextSequenceNumber() : 0;
 	}
 	
 	public FragmentImg getCurrentDisplayFragment() {
@@ -253,8 +280,8 @@ public class QRCodeEncoderChannelModel {
 
 	public String getAcknowledgeInfo() {
 		StringBuilder sb = new StringBuilder();
-        int countNoAck = 0, minNoAck = Integer.MAX_VALUE, maxNoAck = -1;
         if (fragmentImgs != null) {
+        	int countNoAck = 0, minNoAck = Integer.MAX_VALUE, maxNoAck = -1;
         	for(FragmentImg frag : fragmentImgs.values()) {
         		if (! frag.isAcknowledge()) {
         			countNoAck++;
@@ -262,17 +289,21 @@ public class QRCodeEncoderChannelModel {
         			maxNoAck = Math.max(maxNoAck, frag.getFragmentNumber());
         		}
         	}
-        	if (countNoAck == 1) {
+        	if (countNoAck == 0) {
         		sb.append("all ack");
         	} else if (countNoAck == 1) {
         		sb.append("frag not ack: " + minNoAck);
         	} else {
-        		sb.append(countNoAck + " frag(s) not ack, in " + minNoAck + "-" + maxNoAck);
+        		sb.append(countNoAck + " frags, in " + minNoAck + "-" + maxNoAck);
         	}
+        } else {
+        	
         }
 		return sb.toString();
 	}
 
-
+	public void setMillisBetweenImg(long p) {
+		this.millisBetweenImg = p;
+	}
 
 }

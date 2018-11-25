@@ -198,10 +198,31 @@ public class QRCodesDecoderChannel {
 	public String getAheadFragsInfo() {
 		StringBuilder res = new StringBuilder();
 		if (!aheadFragments.isEmpty()) {
-			res.append("ahead " + aheadFragments.size() + " frag(s):\n");
+			int minAhead = Integer.MAX_VALUE;
+			int maxAhead = -1;
 			for(QRCodeDecodedFragment frag : aheadFragments.values()) {
-				res.append(frag.getFragmentNumber());
-				res.append(" ");
+				int fragNum = frag.getFragmentNumber();
+				minAhead = Math.min(fragNum, minAhead);
+				maxAhead = Math.max(fragNum, maxAhead);
+			}
+			res.append((aheadFragments.size() + nextSequenceNumber-1) 
+					+ " = " + (nextSequenceNumber-1) + " + " + aheadFragments.size() + " ahead frag(s) in " + minAhead + ".." + maxAhead + " : ");
+			int prev = minAhead;
+			for(int i = minAhead+1; i <= maxAhead; i++) {
+				while(null != aheadFragments.get(i) && i <= maxAhead) {
+					i++;
+				}
+				int last = i-1;
+				if (prev != last) {
+					res.append(prev + "-" + last + " ");
+				} else {
+					res.append(prev + " ");
+				}
+
+				while(null == aheadFragments.get(i) && i <= maxAhead) {
+					i++;
+				}
+				prev = i;				
 			}
 		}
 		return res.toString();

@@ -49,7 +49,7 @@ public class QRCodeChannelEncoderApp {
                 frame.pack();
                 frame.setVisible(true);
                 
-                frame.setBounds(new Rectangle(1000, 50, 1000, 1000));
+                frame.setBounds(new Rectangle(1000, 50, 900, 900));
             }
 
         });

@@ -42,10 +42,12 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	
 	private int samplingLen;
 
+	DimInt2D dim;
 	byte[] imgGrayData;
 	private Image zbarImg;
+
 	
-	int freqPrintln = 100;
+	int freqPrintln = 50;
 	int moduloPrintln = 0;
 	int prevQRResultCount;
 	int coutPrevRepeat = 0;
@@ -105,6 +107,8 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 
 	@Override
 	public void onStart(DimInt2D dim) {
+		this.dim = dim;
+		log.info("init zBarImg " + dim);
 		try {
 			zbarImg = new Image(dim.w, dim.h, "Y800");
 		} catch(RuntimeException ex) {
@@ -112,7 +116,7 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 			throw ex;
 		}
 		this.imgGrayData = new byte[dim.w * dim.h];
-		
+
 		rollingStats.clearStats();
 		rollingStats.startBucket();
 		
@@ -140,15 +144,12 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 		
 		long nanosBefore = System.nanoTime();
 		
-		ImageScanner imageScanner = new ImageScanner();
-		imageScanner.enableCache(false); // ??
-		// imageScanner.setConfig(arg0, arg1, arg2);
 
 		Raster imgRaster = img.getData();
 		DataBufferByte imgBuffer = (DataBufferByte) imgRaster.getDataBuffer();
-		byte[] imgData = imgBuffer.getData();
+		// byte[] imgData = imgBuffer.getData();
 		// convert RGB to Gray..
-		final int w = imgRaster.getWidth(), h = imgRaster.getHeight();  
+		final int w = imgRaster.getWidth(), h = imgRaster.getHeight();
 		for(int y = 0, i=0, gi=0; y < h; y++) {
 			for(int x = 0; x < w; x++,i+=3,gi++) {
 //				byte r = imgData[i], g = imgData[i+1], b = imgData[i+2];  
@@ -181,6 +182,9 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 		}
 		
 		zbarImg.setData(imgGrayData);
+
+		ImageScanner imageScanner = new ImageScanner();
+		// imageScanner.enableCache(true);
 		
 		imageScanner.scanImage(zbarImg);
 		
@@ -196,26 +200,35 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 			}
 			qrResults.add(new QRResult(qrSymbol.getData(), qrSymbol.getDataBytes(), pts));
 		}
-		int qrResultCount = qrResults.size(); 
+		int qrResultCount = qrResults.size();
+		
+//		System.out.print((qrResultCount == 1)? "1" : "0" + " ");
 		if (qrResultCount != prevQRResultCount) {
 			moduloPrintln--;
 			if (moduloPrintln <= 0) {
 				moduloPrintln = freqPrintln;
 				System.out.println();
 			}
-			if (coutPrevRepeat > 1) {
-				System.out.print("(" + coutPrevRepeat + ") ");
-			} else {
-				System.out.print(" ");
-			}
-			if (qrResultCount == 1) {
-				System.out.print('1');
-			} else if (qrResultCount == 0) {
-				System.out.print('0');
-			} else {
-				System.out.print(Integer.toString(qrResultCount));
-			}
+//			if (coutPrevRepeat > 1) {
+//				System.out.print("(" + coutPrevRepeat + ") ");
+//			} else {
+//				System.out.print(" ");
+//			}
+//			if (qrResultCount == 1) {
+//				System.out.print('1');
+//			} else if (qrResultCount == 0) {
+//				System.out.print('0');
+//			} else {
+//				System.out.print(Integer.toString(qrResultCount));
+//			}
 
+			String prevText = (prevQRResultCount == 0)? "-" : ((prevQRResultCount == 1)? "+" : "++"); 
+			if (coutPrevRepeat > 1) {
+				System.out.print(prevText + coutPrevRepeat + " ");
+			} else {
+				System.out.print(prevText + " ");
+			}
+			
 			coutPrevRepeat = 0;
 		}
 		prevQRResultCount = qrResultCount;

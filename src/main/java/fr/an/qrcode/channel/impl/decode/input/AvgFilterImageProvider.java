@@ -3,6 +3,7 @@ package fr.an.qrcode.channel.impl.decode.input;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
+import org.opencv.imgproc.Imgproc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,11 +55,9 @@ public class AvgFilterImageProvider extends ImageProvider {
 //		}
 //		opencv_core.cvAddWeighted(prevImg, 1.0, currImg, 1.0, 0.0, imgAvg);
 //		opencv_core.cvCopy(currImg, prevImg);
-//		return imgAvg;
+
+		// Imgproc.erode(src, dst, kernel);
 		
-		// TODO camera distortion correction 
-		// https://opencv-java-tutorials.readthedocs.io/en/latest/09-camera-calibration.html
-			
 		// TODO
 		return currImg;		
 	}

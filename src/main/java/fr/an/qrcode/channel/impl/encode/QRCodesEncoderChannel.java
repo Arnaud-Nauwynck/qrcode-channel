@@ -29,7 +29,8 @@ public class QRCodesEncoderChannel {
 	
 	private QREncodeSetting qrEncodeSettings;
 	
-	private int fragmentSequenceNumber = 1; // (sequence number generator)
+	/** next sequence number generator, to write */
+	private int nextSeqNumber = 1; 
 
 	private Map<Integer,QRCodeEncodedFragment> fragments = new LinkedHashMap<>();
 	
@@ -41,8 +42,8 @@ public class QRCodesEncoderChannel {
 	
 	// ------------------------------------------------------------------------
 	
-	public int getFragmentSequenceNumber() {
-		return fragmentSequenceNumber;
+	public int getNextSequenceNumber() {
+		return nextSeqNumber;
 	}
 	
 	public void appendFragmentsFor(String textContent) {
@@ -70,7 +71,7 @@ public class QRCodesEncoderChannel {
 
 		// build Fragment from split text
 		for(String splitText: splitTexts) {
-			int fragSeqNumber = fragmentSequenceNumber++;
+			int fragSeqNumber = nextSeqNumber++;
 			long crc32 = QRCodecChannelUtils.crc32(splitText);
 
 			String header = fragSeqNumber + " " + crc32;
@@ -106,6 +107,10 @@ public class QRCodesEncoderChannel {
 			res.put(frag.getFragmentNumber(), frag.getFragmentImg());
 		}
 		return res;
+	}
+
+	public List<FragmentImg> getNextFragmentImgs() {
+		return new ArrayList<>(getFragmentImgs().values());
 	}
 	
 	public BufferedImage getFragmentImg(int num) {

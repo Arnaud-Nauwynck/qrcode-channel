@@ -67,7 +67,7 @@ public class ImageStreamProvider {
 		    	try {
 		    		doCaptureImage();
 		    	} catch(Exception ex) {
-		    		log.warn("failed to capture image " + ex.getMessage());
+		    		log.warn("failed to capture image ", ex);
 		    		// Failed to capture image??
 			    	try {
 						Thread.sleep(10);

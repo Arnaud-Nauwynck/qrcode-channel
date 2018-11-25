@@ -25,8 +25,8 @@ public class QREncodeSetting {
 //			40;
     
     private ErrorCorrectionLevel errorCorrectionLevel = 
-    		ErrorCorrectionLevel.Q; // ~ 25%
-//    		ErrorCorrectionLevel.H; // ~ 30%
+//    		ErrorCorrectionLevel.Q; // ~ 25%
+    		ErrorCorrectionLevel.H; // ~ 30%
 
     private Map<EncodeHintType, Object> qrHints;
     

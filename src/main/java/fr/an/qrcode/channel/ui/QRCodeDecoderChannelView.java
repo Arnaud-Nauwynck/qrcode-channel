@@ -87,6 +87,7 @@ public class QRCodeDecoderChannelView {
     private JPanel detailImageTabPanel;
     private ImageCanvas qrCodeImageCanvas;
     
+    
     private JPanel infoPanel;
     private JLabel currentDecodeMessageLabel;
     private JLabel currentDecodeTimeMillisLabel;
@@ -95,7 +96,9 @@ public class QRCodeDecoderChannelView {
     private JTextArea recognitionStatsText;
     
     private JLabel saveFileMessageLabel;
-    
+
+    private Calib3dView calib3dView;
+
     // ------------------------------------------------------------------------
 
     public QRCodeDecoderChannelView(QRCodeDecoderChannelModel model) {
@@ -204,8 +207,11 @@ public class QRCodeDecoderChannelView {
             detailImageTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
         }
         
+        calib3dView = new Calib3dView(model.getCalib3dImageProvider());
+        
         tabbedPane.add("recorder", recorderTabPanel);        
         tabbedPane.add("img", detailImageTabPanel);
+        tabbedPane.add("calib3d", calib3dView.getComp());
 
         infoPanel = new JPanel(new GridLayout(6, 1));
         { 

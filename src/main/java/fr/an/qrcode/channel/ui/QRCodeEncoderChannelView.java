@@ -53,9 +53,13 @@ public class QRCodeEncoderChannelView {
     private JTextField qrCodeNumberField;
     private JLabel channelSeqNumberLabel;
     private JButton nextQRCodeButton;
+    
+    private JTextField millisBetweenImageField;
     private JButton playQRCodeButton;
     private JButton stopQRCodeButton;
+    
     private JLabel acknowledgeInfoLabel;
+    private JTextField acknowledgeSeqNumberField;
     private JTextField acknowledgeAddField;
     
     private ImageCanvas qrCodeImageCanvas;
@@ -65,6 +69,7 @@ public class QRCodeEncoderChannelView {
     private JTextField qrDetailDataText;
     // private JTextField qrDetailDuplexMetadataText;
     
+    private Calib3dChartPanel calib3dChartPanel;
     
     // ------------------------------------------------------------------------
 
@@ -125,7 +130,10 @@ public class QRCodeEncoderChannelView {
 
             playerToolbar = new JToolBar();
             playerTabPanel.add(playerToolbar, BorderLayout.NORTH);
-            
+
+            JLabel numLabel = new JLabel("num: ");
+            playerToolbar.add(numLabel);
+
             qrCodeNumberField = new JTextField(3);
             Dimension prefSize = qrCodeNumberField.getPreferredSize();
             prefSize.setSize(3*20, prefSize.getHeight());
@@ -150,17 +158,54 @@ public class QRCodeEncoderChannelView {
             nextQRCodeButton = new JButton(">");
             nextQRCodeButton.addActionListener(e -> model.onDisplayNextFrag());
             playerToolbar.add(nextQRCodeButton);
-                        
+
+            JLabel millisBetweenImageLabel = new JLabel(" ms/img: ");
+            playerToolbar.add(millisBetweenImageLabel);
+
+            millisBetweenImageField = new JTextField(3);
+            // millisBetweenImageField.setPreferredSize(new Dimension(50, 30));
+            playerToolbar.add(millisBetweenImageField);
+            millisBetweenImageField.addKeyListener(new KeyAdapter() {
+            	public void keyPressed(KeyEvent event) {
+            		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
+            			long millis = Long.parseLong(millisBetweenImageField.getText());
+            			model.setMillisBetweenImg(millis);
+            		}
+            	}
+            });
+            
             playQRCodeButton = new JButton("Start");
             playQRCodeButton.addActionListener(e -> model.startDisplayLoop());
             playerToolbar.add(playQRCodeButton);
+
+            //TODO
+//            JButton rewindToAckButton = new JButton("Rewind");
+//            rewindToAckButton.addActionListener(e -> model.rewindToAck());
+//            playerToolbar.add(rewindToAckButton);
 
             stopQRCodeButton = new JButton("Stop");
             stopQRCodeButton.addActionListener(e -> model.stopDisplayLoop());
             playerToolbar.add(stopQRCodeButton);
 
-            acknowledgeInfoLabel = new JLabel();
+
+            acknowledgeInfoLabel = new JLabel(" ack:");
             playerToolbar.add(acknowledgeInfoLabel);
+            
+            acknowledgeSeqNumberField = new JTextField(3);
+            acknowledgeSeqNumberField.addKeyListener(new KeyAdapter() {
+            	public void keyPressed(KeyEvent event) {
+            		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
+            			int seq = Integer.parseInt(acknowledgeSeqNumberField.getText());
+            			model.setAckSeqNumber(seq);
+            		}
+            	}
+            });
+
+            playerToolbar.add(createAckButton(5));
+            playerToolbar.add(createAckButton(10));
+            playerToolbar.add(createAckButton(20));
+            playerToolbar.add(createAckButton(50));
+            
             
             acknowledgeAddField = new JTextField();
             acknowledgeAddField.addKeyListener(new KeyAdapter() {
@@ -172,7 +217,6 @@ public class QRCodeEncoderChannelView {
             	}
             });
             playerToolbar.add(acknowledgeAddField);
-            
             
             
             qrCodeImageCanvas = new ImageCanvas();
@@ -194,12 +238,21 @@ public class QRCodeEncoderChannelView {
             playerTabPanel.add(qrDetailPanel, BorderLayout.SOUTH);
         }
 
+        calib3dChartPanel = new Calib3dChartPanel();
+        
         tabbedPane.add("input", inputTabPanel);
         tabbedPane.add("player", playerTabPanel);        
+        tabbedPane.add("calib3d-chart", calib3dChartPanel.getComp());        
 
         model2view();
     }
 
+    protected JButton createAckButton(int count) {
+    	JButton button = new JButton("" + count);
+    	button.addActionListener(e -> model.incrAckSeqNumber(count));
+    	return button;
+    }
+    
     public void onInputFilenameEntered() {
     	String inputFilename = inputFilenameField.getText();
     	if (inputFilename == null || inputFilename.isEmpty()) {
@@ -249,7 +302,7 @@ public class QRCodeEncoderChannelView {
         String fragId = fragImg != null? "" + fragImg.getFragmentNumber() : "";
         qrCodeNumberField.setText(fragId);
         
-        int fragmentsSeqNumber = model.getChannelSequenceNumber();
+        int fragmentsSeqNumber = model.getChannelNextSequenceNumber();
         channelSeqNumberLabel.setText("/"+ fragmentsSeqNumber);
 
         String acknowledgeInfo = model.getAcknowledgeInfo();
@@ -257,8 +310,6 @@ public class QRCodeEncoderChannelView {
         
         BufferedImage img = fragImg != null? fragImg.img : null;
         qrCodeImageCanvas.setImage(img);
-        
-        qrCodeImageCanvas.repaint();
         
         qrDetailHeaderText.setText(frag != null? "" + frag.getHeader().length() + " " + frag.getHeader(): "");
         qrDetailDataText.setText(frag != null? "" + frag.getData().length() + " " + frag.getData(): "");

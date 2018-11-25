@@ -35,7 +35,7 @@ public class QRCodeChannelDecoderApp {
                 frame.pack();
                 frame.setVisible(true);
                 
-                frame.setBounds(new Rectangle(0, 50, 920, 1000));
+                frame.setBounds(new Rectangle(0, 50, 920, 900));
             }
         });
     }

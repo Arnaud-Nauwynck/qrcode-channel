@@ -9,20 +9,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.SwingUtilities;
 import javax.swing.event.SwingPropertyChangeSupport;
 
+import org.opencv.core.Mat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.zxing.DecodeHintType;
 
 import fr.an.qrcode.channel.impl.QRCodeUtils;
+import fr.an.qrcode.channel.impl.QROpenCvUtils;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel;
+import fr.an.qrcode.channel.impl.decode.calib3d.OpenCvCalib3d;
+import fr.an.qrcode.channel.impl.decode.calib3d.OpenCvCalib3dImageProvider;
 import fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent;
 import fr.an.qrcode.channel.impl.decode.input.AvgFilterImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.DesktopScreenshotImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.WebcamImageProvider;
+import fr.an.qrcode.channel.impl.util.DimInt2D;
 
 /**
  * model associated to QRCodeDecoderChannelView<BR/>
@@ -46,7 +51,11 @@ public class QRCodeDecoderChannelModel {
     DesktopScreenshotImageProvider desktopImageProvider = new DesktopScreenshotImageProvider();
     // OpenCVImageProvider openCVImageProvider; // = new openCVImageProvider();
     WebcamImageProvider webcamImageProvider; // = new WebcamImageProvider();
-        
+
+    private String calib3dConfParamsName = "default-calib3d.data";
+    OpenCvCalib3dImageProvider calib3dImageProvider;
+    OpenCvCalib3d calib3d;
+    
     private Map<DecodeHintType, Object> qrDecoderHints = QRCodeUtils.createDefaultDecoderHints();
     
     private QRCodesDecoderChannel decoderChannel;
@@ -96,13 +105,15 @@ public class QRCodeDecoderChannelModel {
     		if (webcamImageProvider == null) {
     			webcamImageProvider = WebcamImageProvider.createDefault();
     		}
-    		return new AvgFilterImageProvider(webcamImageProvider);
+    		DimInt2D size = webcamImageProvider.getSize();
+    		this.calib3d = new OpenCvCalib3d(size.w, size.h);
+    		this.calib3dImageProvider = new OpenCvCalib3dImageProvider(webcamImageProvider, calib3d);
+			return new AvgFilterImageProvider(calib3dImageProvider);
     	}
     	default: throw new IllegalStateException();
     	}
     }
-
-
+    
     public ImageProviderMode getImageProviderMode() {
     	return imageProviderMode;
     }
@@ -181,6 +192,41 @@ public class QRCodeDecoderChannelModel {
 	public QRCapturedEvent getCurrQRCapturedEvent() {
 		return currQRCapturedEvent;
 	}
+
+	// delegate to calib3d 
+	// --------------------------------------------------------------------------------------------
+
+	public OpenCvCalib3d getCalib3d() {
+		return calib3d;
+	}
+
+	public void calib3dSaveConfParams() {
+		if (this.calib3d.isCalibrated()) {
+			calib3d.saveConfParams(calib3dConfParamsName);
+		}
+	}
+
+	public void calib3dLoadConfParams() {
+		calib3d.loadConfParams(calib3dConfParamsName);
+	}
+
+	public void calib3dReset() {
+		this.calib3d.clearCorners();
+	}
+
+	public void calib3dProcessFrame(BufferedImage img) {
+//		// calib3d.processFrame(grayFrame, displayRgbaFrame);
+//		Mat mat = QROpenCvUtils.toMat(img);
+//		calib3d.findPattern(mat);
+	}
+
+	public OpenCvCalib3dImageProvider getCalib3dImageProvider() {
+		return calib3dImageProvider;
+	}
+	public void calib3dCalibrate() {
+		calib3d.calibrate();
+	}
+	
 	
 	// delegate to decoderChannel 
 	// --------------------------------------------------------------------------------------------
