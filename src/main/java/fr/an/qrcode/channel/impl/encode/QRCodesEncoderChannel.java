@@ -130,23 +130,67 @@ public class QRCodesEncoderChannel {
 	}
 
 	public BufferedImage encodeAndRender(byte[] payloadBytes) {
+		BitMatrix bitMatrix = encodeToBitMatrix(payloadBytes);
+	    return MatrixToImageWriter.toBufferedImage(bitMatrix);
+	}
+
+	private BitMatrix encodeToBitMatrix(byte[] payloadBytes) {
 		String latin1Text = new String(payloadBytes, java.nio.charset.StandardCharsets.ISO_8859_1);
 
 		QRCodeWriter qrCodeWriter = new QRCodeWriter();
-	    BitMatrix bitMatrix;
 		try {
 			int width = qrEncodeSettings.getQrCodeW();
 			int height = qrEncodeSettings.getQrCodeH();
 			BarcodeFormat qrCodeFormat = qrEncodeSettings.getQrCodeFormat();
 			Map<EncodeHintType, Object> qrHints = qrEncodeSettings.getQrHints();
 
-			bitMatrix = qrCodeWriter.encode(latin1Text, qrCodeFormat, width, height, qrHints);
-
+			return qrCodeWriter.encode(latin1Text, qrCodeFormat, width, height, qrHints);
 		} catch (WriterException ex) {
 			throw new RuntimeException("failed to encode qrcode for text", ex);
 		}
-	    BufferedImage image = MatrixToImageWriter.toBufferedImage(bitMatrix);
-	    return image;
+	}
+
+	/**
+	 * composites up to 3 fragments' QR codes into one image, each rendered into a separate color
+	 * channel (R, G, B) -- so up to 3 QR codes can be displayed/captured simultaneously in one frame.
+	 * a null entry leaves that channel fully bright (255), i.e. no QR code drawn in that channel.
+	 */
+	public BufferedImage encodeAndRenderRgbSplit(QRCodeEncodedFragment redFrag, QRCodeEncodedFragment greenFrag, QRCodeEncodedFragment blueFrag) {
+		return encodeAndRenderRgbSplit(
+				redFrag != null ? redFrag.getPayloadBytes() : null,
+				greenFrag != null ? greenFrag.getPayloadBytes() : null,
+				blueFrag != null ? blueFrag.getPayloadBytes() : null);
+	}
+
+	public BufferedImage encodeAndRenderRgbSplit(byte[] redPayload, byte[] greenPayload, byte[] bluePayload) {
+		BitMatrix redBits = redPayload != null ? encodeToBitMatrix(redPayload) : null;
+		BitMatrix greenBits = greenPayload != null ? encodeToBitMatrix(greenPayload) : null;
+		BitMatrix blueBits = bluePayload != null ? encodeToBitMatrix(bluePayload) : null;
+
+		BitMatrix anyBits = redBits != null ? redBits : (greenBits != null ? greenBits : blueBits);
+		if (anyBits == null) {
+			throw new IllegalArgumentException("at least one channel payload must be non-null");
+		}
+		int width = anyBits.getWidth();
+		int height = anyBits.getHeight();
+
+		BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				int r = channelValue(redBits, x, y);
+				int g = channelValue(greenBits, x, y);
+				int b = channelValue(blueBits, x, y);
+				img.setRGB(x, y, (r << 16) | (g << 8) | b);
+			}
+		}
+		return img;
+	}
+
+	private static int channelValue(BitMatrix bits, int x, int y) {
+		if (bits == null) {
+			return 0xFF; // no QR code in this channel -- leave fully bright
+		}
+		return bits.get(x, y) ? 0x00 : 0xFF; // black module -> 0, white/background -> 255
 	}
 
 	public Map<Integer,FragmentImg> getFragmentImgs() {

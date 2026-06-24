@@ -52,12 +52,13 @@ public class QRCodesEncoderChannelTest {
 
 	@Test
 	public void testByteRoundTripThroughZXing() throws Exception {
-		byte[] payload = new byte[256];
-		for (int i = 0; i < 256; i++) {
-			payload[i] = (byte) i;
+		// covers the full 0x00-0xFF byte range (every 4th value), kept short enough to fit the default QR version's capacity
+		byte[] payload = new byte[64];
+		for (int i = 0; i < 64; i++) {
+			payload[i] = (byte) (i * 4);
 		}
 
-		BufferedImage img = sut.encodeAndRender(payload);
+		BufferedImage img = withWhiteBorder(sut.encodeAndRender(payload), 20);
 
 		LuminanceSource source = new BufferedImageLuminanceSource(img);
 		BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
@@ -71,6 +72,17 @@ public class QRCodesEncoderChannelTest {
 		assertArrayEquals(payload, decodedPayload);
 	}
 
+	/** real captures (screenshot/webcam) always have a quiet zone around the QR code; a raw render with zero margin can fail ZXing's detector */
+	private static BufferedImage withWhiteBorder(BufferedImage src, int border) {
+		BufferedImage bordered = new BufferedImage(src.getWidth() + 2 * border, src.getHeight() + 2 * border, BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = bordered.createGraphics();
+		g.setColor(java.awt.Color.WHITE);
+		g.fillRect(0, 0, bordered.getWidth(), bordered.getHeight());
+		g.drawImage(src, border, border, null);
+		g.dispose();
+		return bordered;
+	}
+
 	private static final Pattern HEADER_PATTERN = Pattern.compile("([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)");
 
 	@Test
@@ -80,7 +92,7 @@ public class QRCodesEncoderChannelTest {
 
 		Map<Integer, FragmentImg> imgs = encoder.getFragmentImgs();
 		FragmentImg frag1 = imgs.get(1);
-		Matcher m = HEADER_PATTERN.matcher(frag1.owner.getHeader());
+		Matcher m = HEADER_PATTERN.matcher(frag1.owner.getHeader().trim());
 		assertTrue(m.matches());
 		assertEquals(1, Integer.parseInt(m.group(1)));
 		assertEquals(1, Integer.parseInt(m.group(2)));

@@ -21,6 +21,7 @@ import fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent;
 import fr.an.qrcode.channel.impl.decode.filter.QRDecodeRollingStats;
 import fr.an.qrcode.channel.impl.decode.filter.QRDecodeRollingStats.Bucket;
 import fr.an.qrcode.channel.impl.decode.filter.QRStreamCallback;
+import fr.an.qrcode.channel.impl.decode.filter.RgbSplitQRStreamFromImageStreamCallback;
 import fr.an.qrcode.channel.impl.decode.filter.ZXingQRStreamFromImageStreamCallback;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.ImageStreamCallback;
@@ -44,6 +45,19 @@ public class QRCodesDecoderChannel {
 
 	private ComboPacketCache comboCache = new ComboPacketCache();
 
+	/**
+	 * small ring buffer retaining the most recently consumed plain fragments' bytes, keyed by id.
+	 * needed because combo recovery can require XORing against a fragment that was already folded
+	 * into readyBytes (and thus no longer individually retrievable) -- this keeps a window of them
+	 * available, sized to the max supported combo width (code 8).
+	 */
+	private static final int RECENT_CONSUMED_WINDOW = 8;
+	private Map<Integer,byte[]> recentlyConsumedFragments = new LinkedHashMap<Integer,byte[]>() {
+		protected boolean removeEldestEntry(Map.Entry<Integer,byte[]> eldest) {
+			return size() > RECENT_CONSUMED_WINDOW;
+		}
+	};
+
     // emit
 	private DecoderChannelListener eventListener;
 	
@@ -54,13 +68,22 @@ public class QRCodesDecoderChannel {
 			Map<DecodeHintType, Object> qrHints,
 			ImageProvider imageProvider,
 			DecoderChannelListener eventListener) {
+		this(qrHints, imageProvider, eventListener, false);
+	}
+
+	public QRCodesDecoderChannel(
+			Map<DecodeHintType, Object> qrHints,
+			ImageProvider imageProvider,
+			DecoderChannelListener eventListener,
+			boolean rgbSplitMode) {
 		int samplingLen = 3;
 		this.eventListener = eventListener;
-		this.qrStreamFromImageStream =
-				new ZXingQRStreamFromImageStreamCallback(innerQRStreamCallback, samplingLen, qrHints);
+		this.qrStreamFromImageStream = rgbSplitMode
+				? new RgbSplitQRStreamFromImageStreamCallback(innerQRStreamCallback, qrHints)
+				: new ZXingQRStreamFromImageStreamCallback(innerQRStreamCallback, samplingLen, qrHints);
 				// new ZBarQRStreamFromImageStreamCallback(innerQRStreamCallback, samplingLen);
 		this.imageStreamProvider = new ImageStreamProvider(imageProvider, qrStreamFromImageStream);
-		log.info("ctor QRCodesDecoderChannel");
+		log.info("ctor QRCodesDecoderChannel rgbSplitMode:" + rgbSplitMode);
 	}
 
 	// ------------------------------------------------------------------------
@@ -184,6 +207,7 @@ public class QRCodesDecoderChannel {
     private void acceptDecodedFragment(int fragSeqNumber, String header, byte[] dataBytes) {
 		if (nextSequenceNumber == fragSeqNumber) {
 			readyBytes.writeBytes(dataBytes);
+			recentlyConsumedFragments.put(fragSeqNumber, dataBytes);
 			currDecodeMsg = "OK recognised fragment (" + fragSeqNumber + ")";
 			nextSequenceNumber++;
 
@@ -196,6 +220,7 @@ public class QRCodesDecoderChannel {
 					int nextFragNumber = frag.getFragmentNumber();
 					if (nextFragNumber == nextSequenceNumber) {
 						readyBytes.writeBytes(frag.getData());
+						recentlyConsumedFragments.put(nextFragNumber, frag.getData());
 						nextSequenceNumber++;
 
 						foundNextFrag = true;
@@ -228,11 +253,11 @@ public class QRCodesDecoderChannel {
     	acceptDecodedFragment(fragSeqNumber, syntheticHeader, dataBytes);
     }
 
-    /** lookup used by ComboPacketCache to fetch bytes of a fragment id already known to the decoder (consumed or buffered ahead) */
+    /** lookup used by ComboPacketCache to fetch bytes of a fragment id already known to the decoder (consumed, recently-consumed, or buffered ahead) */
     private byte[] lookupKnownFragmentBytes(int fragSeqNumber) {
-    	if (fragSeqNumber < nextSequenceNumber) {
-    		// already consumed into readyBytes -- not retained individually, so cannot be used for recovery anymore
-    		return null;
+    	byte[] recent = recentlyConsumedFragments.get(fragSeqNumber);
+    	if (recent != null) {
+    		return recent;
     	}
     	QRCodeDecodedFragment frag = aheadFragments.get(fragSeqNumber);
     	return frag != null ? frag.getData() : null;
@@ -253,6 +278,10 @@ public class QRCodesDecoderChannel {
 
 	public String getReadyText() {
 		return readyBytes.toString(StandardCharsets.UTF_8);
+	}
+
+	public byte[] getReadyBytes() {
+		return readyBytes.toByteArray();
 	}
 
 	public String getAheadFragsInfo() {

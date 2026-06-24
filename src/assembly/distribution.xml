@@ -9,7 +9,9 @@
   <fileSets>
     <fileSet>
       <directory>${basedir}/src/dist</directory>
+      <!--
       <outputDirectory>/</outputDirectory>
+      -->
       <fileMode>0755</fileMode>
       <includes>
       	<include>**/*.sh</include>
@@ -18,7 +20,7 @@
   </fileSets>
   <dependencySets>
   	<dependencySet>
-  		<outputDirectory>/lib</outputDirectory>
+  		<outputDirectory>lib</outputDirectory>
   	</dependencySet>
   </dependencySets>
 </assembly>

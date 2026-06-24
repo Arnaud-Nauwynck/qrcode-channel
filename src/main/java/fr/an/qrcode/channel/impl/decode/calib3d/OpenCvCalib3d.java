@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import fr.an.qrcode.channel.impl.QROpenCvIOUtils;
+import fr.an.qrcode.channel.impl.QROpenCvNativeLoader;
 
 /**
  *
@@ -37,7 +38,7 @@ import fr.an.qrcode.channel.impl.QROpenCvIOUtils;
 public class OpenCvCalib3d {
 
 	static {
-		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+		QROpenCvNativeLoader.ensureLoaded();
 	}
 	
 	private static final Logger log = LoggerFactory.getLogger(OpenCvCalib3d.class);

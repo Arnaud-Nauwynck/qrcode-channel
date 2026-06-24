@@ -1,5 +1,6 @@
 package fr.an.qrcode.channel.impl.decode;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
@@ -94,7 +95,7 @@ public class QRCodesDecoderChannelTest {
 		sut.handleFragmentHeaderAndData(plainPacket(3, d3));
 
 		byte[] expected = concat(d1, d2, d3);
-		assertEquals(new String(expected, StandardCharsets.UTF_8), sut.getReadyText());
+		assertArrayEquals(expected, sut.getReadyBytes());
 		assertEquals(4, sut.getNextSequenceNumber());
 	}
 
@@ -119,8 +120,8 @@ public class QRCodesDecoderChannelTest {
 				sut.handleFragmentHeaderAndData(comboPacket(code, code, combo));
 
 				byte[] expected = concat(frags);
-				assertEquals("code=" + code + " dropPos=" + dropPos,
-						new String(expected, StandardCharsets.UTF_8), sut.getReadyText());
+				assertArrayEquals("code=" + code + " dropPos=" + dropPos,
+						expected, sut.getReadyBytes());
 			}
 		}
 	}

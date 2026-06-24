@@ -2,6 +2,7 @@ package fr.an.qrcode.channel.ui;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.GridLayout;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
@@ -9,8 +10,10 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -25,6 +28,7 @@ import org.apache.commons.io.FileUtils;
 import fr.an.qrcode.channel.impl.QREncodeSetting;
 import fr.an.qrcode.channel.impl.encode.FragmentImg;
 import fr.an.qrcode.channel.impl.encode.QRCodeEncodedFragment;
+import fr.an.qrcode.channel.ui.QRCodeEncoderChannelModel.DisplayMode;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
 
 /**
@@ -49,6 +53,7 @@ public class QRCodeEncoderChannelView {
 
     private JPanel playerTabPanel;
     private JToolBar playerToolbar;
+    private JCheckBox rgbSplitModeCheckBox;
     private JButton prevQRCodeButton;
     private JTextField qrCodeNumberField;
     private JLabel channelSeqNumberLabel;
@@ -64,9 +69,15 @@ public class QRCodeEncoderChannelView {
 
     private ImageCanvas qrCodeImageCanvas;
 
-    private JToolBar qrDetailPanel;
+    private JPanel qrDetailPanel;
+    private JToolBar qrDetailHeaderToolbar;
+    private JCheckBox qrDetailShowAllChannelsCheckBox;
+    private JToolBar qrDetailSingleLineToolbar;
     private JTextField qrDetailHeaderText;
     private JTextField qrDetailDataText;
+    private JPanel qrDetailAllChannelsGridPanel;
+    private JLabel[] qrDetailAllChannelsHeaderLabels;
+    private JLabel[] qrDetailAllChannelsDataLabels;
     // private JTextField qrDetailDuplexMetadataText;
 
     private Calib3dChartPanel calib3dChartPanel;
@@ -130,6 +141,14 @@ public class QRCodeEncoderChannelView {
 
             playerToolbar = new JToolBar();
             playerTabPanel.add(playerToolbar, BorderLayout.NORTH);
+
+            rgbSplitModeCheckBox = new JCheckBox("3 QRCodes (RGB split)");
+            rgbSplitModeCheckBox.setSelected(model.getDisplayMode() == DisplayMode.RGB_SPLIT);
+            rgbSplitModeCheckBox.addActionListener(e -> {
+            	model.setDisplayMode(rgbSplitModeCheckBox.isSelected() ? DisplayMode.RGB_SPLIT : DisplayMode.BLACK_WHITE);
+            	model2view();
+            });
+            playerToolbar.add(rgbSplitModeCheckBox);
 
             JLabel numLabel = new JLabel("num: ");
             playerToolbar.add(numLabel);
@@ -226,14 +245,37 @@ public class QRCodeEncoderChannelView {
             playerTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
 
 
-            qrDetailPanel = new JToolBar();
-            qrDetailPanel.add(new JLabel("data:"));
+            qrDetailPanel = new JPanel(new BorderLayout());
+
+            qrDetailHeaderToolbar = new JToolBar();
+            qrDetailHeaderToolbar.add(new JLabel("data:"));
+
+            qrDetailShowAllChannelsCheckBox = new JCheckBox("show all 3");
+            qrDetailShowAllChannelsCheckBox.addActionListener(e -> model2view());
+            qrDetailHeaderToolbar.add(qrDetailShowAllChannelsCheckBox);
+
+            qrDetailPanel.add(qrDetailHeaderToolbar, BorderLayout.NORTH);
+
+            qrDetailSingleLineToolbar = new JToolBar();
             qrDetailHeaderText = new JTextField();
-            qrDetailPanel.add(qrDetailHeaderText);
+            qrDetailSingleLineToolbar.add(qrDetailHeaderText);
             qrDetailDataText = new JTextField();
-            qrDetailPanel.add(qrDetailDataText);
+            qrDetailSingleLineToolbar.add(qrDetailDataText);
 //            qrDetailDuplexMetadataText = new JTextField();
-//            qrDetailPanel.add(qrDetailDuplexMetadataText);
+//            qrDetailSingleLineToolbar.add(qrDetailDuplexMetadataText);
+
+            int maxChannels = 3;
+            qrDetailAllChannelsGridPanel = new JPanel(new GridLayout(maxChannels, 2));
+            qrDetailAllChannelsHeaderLabels = new JLabel[maxChannels];
+            qrDetailAllChannelsDataLabels = new JLabel[maxChannels];
+            for (int i = 0; i < maxChannels; i++) {
+            	qrDetailAllChannelsHeaderLabels[i] = new JLabel();
+            	qrDetailAllChannelsDataLabels[i] = new JLabel();
+            	qrDetailAllChannelsGridPanel.add(qrDetailAllChannelsHeaderLabels[i]);
+            	qrDetailAllChannelsGridPanel.add(qrDetailAllChannelsDataLabels[i]);
+            }
+
+            qrDetailPanel.add(qrDetailSingleLineToolbar, BorderLayout.CENTER);
 
             playerTabPanel.add(qrDetailPanel, BorderLayout.SOUTH);
         }
@@ -295,9 +337,9 @@ public class QRCodeEncoderChannelView {
 
     private void model2view() {
         // imageSizeField.setText(model.getQrCodeW() + "," + model.getQrCodeH());
-    	
-    	FragmentImg fragImg = model.getCurrentDisplayFragment();
-        QRCodeEncodedFragment frag = fragImg != null? fragImg.owner : null;
+
+    	List<FragmentImg> group = model.getCurrentDisplayGroup();
+    	FragmentImg fragImg = group.isEmpty()? null : group.get(0);
 
         String fragId = fragImg != null? "" + fragImg.getFragmentNumber() : "";
         qrCodeNumberField.setText(fragId);
@@ -308,12 +350,46 @@ public class QRCodeEncoderChannelView {
         String acknowledgeInfo = model.getAcknowledgeInfo();
         acknowledgeInfoLabel.setText(acknowledgeInfo);
 
-        BufferedImage img = fragImg != null? fragImg.img : null;
+        BufferedImage img = model.getCurrentFragmentImg();
         qrCodeImageCanvas.setImage(img);
 
-        qrDetailHeaderText.setText(frag != null? "" + frag.getHeader().length() + " " + frag.getHeader(): "");
-        qrDetailDataText.setText(frag != null?
-        		"" + frag.getData().length + " " + new String(frag.getData(), java.nio.charset.StandardCharsets.ISO_8859_1) : "");
+        qrDetailShowAllChannelsCheckBox.setEnabled(group.size() > 1);
+        updateDetailTexts(group);
+    }
+
+    private void updateDetailTexts(List<FragmentImg> group) {
+    	boolean showAll = qrDetailShowAllChannelsCheckBox.isSelected() && group.size() > 1;
+
+    	JComponent currentCenter = showAll ? qrDetailAllChannelsGridPanel : qrDetailSingleLineToolbar;
+    	if (qrDetailPanel.getComponentCount() < 2 || qrDetailPanel.getComponent(1) != currentCenter) {
+    		qrDetailPanel.removeAll();
+    		qrDetailPanel.add(qrDetailHeaderToolbar, BorderLayout.NORTH);
+    		qrDetailPanel.add(currentCenter, BorderLayout.CENTER);
+    		qrDetailPanel.revalidate();
+    		qrDetailPanel.repaint();
+    	}
+
+    	if (showAll) {
+    		int maxChannels = qrDetailAllChannelsHeaderLabels.length;
+    		for (int i = 0; i < maxChannels; i++) {
+    			if (i < group.size()) {
+    				QRCodeEncodedFragment frag = group.get(i).owner;
+    				String headerOneLine = frag.getHeader().replace("\n", "");
+    				qrDetailAllChannelsHeaderLabels[i].setText(headerOneLine.length() + " " + headerOneLine);
+    				qrDetailAllChannelsDataLabels[i].setText(frag.getData().length + " "
+    						+ new String(frag.getData(), java.nio.charset.StandardCharsets.ISO_8859_1));
+    			} else {
+    				qrDetailAllChannelsHeaderLabels[i].setText("");
+    				qrDetailAllChannelsDataLabels[i].setText("");
+    			}
+    		}
+    	} else {
+    		FragmentImg fragImg = group.isEmpty() ? null : group.get(0);
+    		QRCodeEncodedFragment frag = fragImg != null ? fragImg.owner : null;
+    		qrDetailHeaderText.setText(frag != null ? frag.getHeader().length() + " " + frag.getHeader() : "");
+    		qrDetailDataText.setText(frag != null
+    				? frag.getData().length + " " + new String(frag.getData(), java.nio.charset.StandardCharsets.ISO_8859_1) : "");
+    	}
     }
 
 }

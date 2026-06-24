@@ -71,10 +71,21 @@ public class EncodeDecodeWithComboRecoveryE2ETest {
 
 	private String decodeImageToText(QRCodeReader reader, BufferedImage img, Map<DecodeHintType, Object> hints)
 			throws NotFoundException, ChecksumException, FormatException {
-		LuminanceSource source = new BufferedImageLuminanceSource(img);
+		LuminanceSource source = new BufferedImageLuminanceSource(withWhiteBorder(img, 20));
 		BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
 		Result result = reader.decode(bitmap, hints);
 		return result.getText();
+	}
+
+	/** real captures (screenshot/webcam) always have a quiet zone around the QR code; a raw render with zero margin can fail ZXing's detector */
+	private static BufferedImage withWhiteBorder(BufferedImage src, int border) {
+		BufferedImage bordered = new BufferedImage(src.getWidth() + 2 * border, src.getHeight() + 2 * border, BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = bordered.createGraphics();
+		g.setColor(java.awt.Color.WHITE);
+		g.fillRect(0, 0, bordered.getWidth(), bordered.getHeight());
+		g.drawImage(src, border, border, null);
+		g.dispose();
+		return bordered;
 	}
 
 	private String buildRepeatingText(int len) {

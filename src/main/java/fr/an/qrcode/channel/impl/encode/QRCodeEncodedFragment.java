@@ -46,13 +46,18 @@ public class QRCodeEncodedFragment {
     public BufferedImage getImg() {
     	BufferedImage img = (imgRef != null)? imgRef.get() : null;
     	if (img == null) {
-    		byte[] headerBytes = header.getBytes(StandardCharsets.US_ASCII);
-    		byte[] payload = Arrays.copyOf(headerBytes, headerBytes.length + data.length);
-    		System.arraycopy(data, 0, payload, headerBytes.length, data.length);
-    		img = owner.encodeAndRender(payload);
+    		img = owner.encodeAndRender(getPayloadBytes());
     		imgRef = new WeakReference<>(img);
     	}
         return img;
+    }
+
+    /** the full QR payload (header + data) as transmitted, ready for QR rendering */
+    public byte[] getPayloadBytes() {
+    	byte[] headerBytes = header.getBytes(StandardCharsets.US_ASCII);
+    	byte[] payload = Arrays.copyOf(headerBytes, headerBytes.length + data.length);
+    	System.arraycopy(data, 0, payload, headerBytes.length, data.length);
+    	return payload;
     }
 
 	public FragmentImg getFragmentImg() {

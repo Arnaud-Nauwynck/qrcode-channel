@@ -59,7 +59,7 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 
 	
 	Mat grayImg, grayImgThreshold, imgErode, imgMorpho, imgBinarize;
-	Mat kernel33 = Mat.ones(3, 3, CvType.CV_32F);
+	Mat kernel33;
 	
 	private Map<DecodeHintType, Object> qrHints;
 	private Decoder decoder;
