@@ -27,13 +27,13 @@ public class QRCodeEncoderChannelModel {
 	private static final Logger LOG = LoggerFactory.getLogger(QRCodeEncoderChannelModel.class);
 	
     private SwingPropertyChangeSupport pcs = new SwingPropertyChangeSupport(this);
-    
+
 	private QREncodeSetting encodeSetting;
-    
+
 	private QRCodesEncoderChannel encoderChannel;
-    
+
     private String text;
-    
+
     private FragmentImg currentDisplayFragment;
     protected int currDisplayIndex;
 
@@ -43,7 +43,7 @@ public class QRCodeEncoderChannelModel {
 	protected long millisBetweenImg = 300;
 	
 	// computed imgs
-	protected Map<Integer,FragmentImg> fragmentImgs; 
+	protected Map<Integer,FragmentImg> fragmentImgs;
 	
 	private int ackSeqNumber = 0;
 	
@@ -54,7 +54,7 @@ public class QRCodeEncoderChannelModel {
     }
 
     // ------------------------------------------------------------------------
-    
+
     public void computeQRCodes(String textContent) {
     	this.text = textContent;
     	this.encoderChannel = new QRCodesEncoderChannel(encodeSetting);
@@ -63,7 +63,7 @@ public class QRCodeEncoderChannelModel {
     	// compute..
     	this.fragmentImgs = encoderChannel.getFragmentImgs();
 
-    	FragmentImg frag0 = !fragmentImgs.isEmpty()? fragmentImgs.get(0) : null; 
+    	FragmentImg frag0 = !fragmentImgs.isEmpty()? fragmentImgs.get(0) : null;
     	setCurrentDisplayFragment(frag0);
     	
     	pcs.firePropertyChange("text", null, text);
@@ -85,7 +85,7 @@ public class QRCodeEncoderChannelModel {
     	}
         displayLoopStopRequested.set(true);
     }
-    
+
     protected void runPlayThread() {
     	List<FragmentImg> fragmentImgs = encoderChannel.getNextFragmentImgs();
     	
@@ -134,7 +134,7 @@ public class QRCodeEncoderChannelModel {
 
     	displayLoopRunning.set(false);
     }
-    
+
     public void onDisplayNextFrag() {
     	if (fragmentImgs == null) {
     		// should click "compute" before!
@@ -229,8 +229,8 @@ public class QRCodeEncoderChannelModel {
 			frag.acknowledge();
     	}
 	}
-    
-    
+
+
 	// ------------------------------------------------------------------------
 
     public void addPropertyChangeListener(PropertyChangeListener listener) {
@@ -262,7 +262,7 @@ public class QRCodeEncoderChannelModel {
 	}
 
 	public void setCurrentDisplayFragment(FragmentImg p) {
-		FragmentImg old = currentDisplayFragment; 
+		FragmentImg old = currentDisplayFragment;
 		this.currentDisplayFragment = p;
 		if (p != null) {
 			currDisplayIndex = p.getFragmentNumber();

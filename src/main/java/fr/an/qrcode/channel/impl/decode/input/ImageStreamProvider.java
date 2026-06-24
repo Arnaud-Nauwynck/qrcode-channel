@@ -34,12 +34,16 @@ public class ImageStreamProvider {
     public void takeSnapshot() {
     	snapshotExecutor.submit(() -> {
     		imageProvider.open();
+    		imageStreamCallback.onStart(imageProvider.getSize());
+    		
     		try {
 	    		// TODO ... take ~5 consecutive snapshots, then average sub-sampling
 	    		doCaptureImage();	
     		} finally {
     			imageProvider.close();
     		}
+    		
+    		imageStreamCallback.onEnd();
     	});
     }
 
@@ -50,7 +54,7 @@ public class ImageStreamProvider {
     	stopListenSnapshotsRequested.set(false);
     	snapshotExecutor.submit(() -> takeSnapshotsLoop());
     }
-    
+
     private void takeSnapshotsLoop() {
     	listenSnapshotsRunning.set(true);
     	try {
@@ -79,9 +83,9 @@ public class ImageStreamProvider {
 		    	}
 		    	
 	    		long nanosAfter = System.nanoTime();
-	    		long millis = TimeUnit.NANOSECONDS.toMillis(nanosAfter - nanosBefore); 
+	    		long millis = TimeUnit.NANOSECONDS.toMillis(nanosAfter - nanosBefore);
 	    		long actualSleepMillis = sleepMillis - millis;
-	    		if (actualSleepMillis > 0) { 
+	    		if (actualSleepMillis > 0) {
 			    	try {
 						Thread.sleep(actualSleepMillis);
 					} catch (InterruptedException e) {
@@ -96,14 +100,14 @@ public class ImageStreamProvider {
     		imageStreamCallback.onEnd();
     	}
     }
-    
+
     public void stopListenSnapshots() {
     	if (! listenSnapshotsRunning.get()) {
     		return;
     	}
     	stopListenSnapshotsRequested.set(true);
     }
-    
+
     public void doCaptureImage() {
     	long nanosBefore = System.nanoTime();
     	

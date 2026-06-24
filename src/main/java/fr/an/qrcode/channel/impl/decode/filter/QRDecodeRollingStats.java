@@ -1,7 +1,7 @@
 package fr.an.qrcode.channel.impl.decode.filter;
 
 public class QRDecodeRollingStats {
-    
+
     private static long STAT_BUCKET_DURATION_MILLIS = 1000;
     private static int STAT_COUNT = 10;
 
@@ -16,14 +16,14 @@ public class QRDecodeRollingStats {
 	    private int countQRRecognizedDuplicate;
 	    private int countQRPacketProtocolError;
 		
-	    
+	
 	    public int totalOkCount() {
 	    	return countImageDropped + countQRRecognized + countQRRecognizedDuplicate;
 	    }
 	    public int totalErrCount() {
 	    	return countQRNotFound + countQRFormatException + countQRChecksumException + countQRPacketProtocolError;
 	    }
-	    
+	
 	    public void clearStat() {
 	    	fromTime = 0;
 	    	millis = 0;
@@ -50,7 +50,7 @@ public class QRDecodeRollingStats {
 	    	countQRRecognizedDuplicate += src.countQRRecognizedDuplicate;
 	    	countQRPacketProtocolError += src.countQRPacketProtocolError;
 	    }
-	    
+	
 		public void incrCountImageDropped() {
 			countImageDropped++;
 		}
@@ -78,9 +78,9 @@ public class QRDecodeRollingStats {
     private Bucket currStat;
     private Bucket[] rollingStats = new Bucket[STAT_COUNT];
     private int currRollingStatIndex;
-    
+
     // --------------------------------------------------------------------------------------------
-    
+
     public QRDecodeRollingStats() {
 	    for(int i = 0; i < STAT_COUNT; i++) {
 	    	this.rollingStats[i] = new Bucket();
@@ -88,9 +88,9 @@ public class QRDecodeRollingStats {
 	    this.currRollingStatIndex = 0;
 	    this.currStat = rollingStats[currRollingStatIndex];
     }
-    
+
     // --------------------------------------------------------------------------------------------
-    
+
 	public void clearStats() {
 		for(int i = 0; i < STAT_COUNT; i++) {
 			rollingStats[i].clearStat();

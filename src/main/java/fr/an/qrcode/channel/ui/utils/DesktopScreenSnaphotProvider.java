@@ -23,7 +23,7 @@ public class DesktopScreenSnaphotProvider {
             throw new RuntimeException("FATAL error", ex);
         }
     }
-    
+
     private boolean useCursor;
 
     private BufferedImage mouseCursor;

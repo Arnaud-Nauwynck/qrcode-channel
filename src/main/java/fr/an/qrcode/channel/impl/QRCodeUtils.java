@@ -35,11 +35,14 @@ public class QRCodeUtils {
     public static Map<DecodeHintType, Object> createDefaultDecoderHints() {
     	Map<DecodeHintType, Object>  qrHints = new HashMap<>();
         qrHints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
-        
+
         qrHints.put(DecodeHintType.POSSIBLE_FORMATS, BarcodeFormat.QR_CODE);
         // ? qrHints.put(DecodeHintType.ALLOWED_LENGTHS
-        
+
 //        qrHints.put(DecodeHintType.PURE_BARCODE, Boolean.TRUE);
+
+        // must match encoder's EncodeHintType.CHARACTER_SET so raw payload bytes round-trip losslessly
+        qrHints.put(DecodeHintType.CHARACTER_SET, "ISO-8859-1");
         return qrHints;
     }
 }

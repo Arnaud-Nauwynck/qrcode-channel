@@ -8,8 +8,8 @@ import fr.an.qrcode.channel.impl.util.PtInt2D;
 public abstract class Calib3dListener {
 
 	public abstract void onImage(
-			BufferedImage undistortImage, 
-			BufferedImage image, 
+			BufferedImage undistortImage,
+			BufferedImage image,
 			PtInt2D[] corners
 			);
 	

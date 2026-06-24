@@ -49,8 +49,8 @@ public class Calib3dView {
 
 		toggleFreezeImageButton = new JButton("freeze");
 		toolbar.add(toggleFreezeImageButton);
-		toggleFreezeImageButton.addActionListener(evt -> { 
-			boolean t = model.toogleFreezeCalib3dImage(); 
+		toggleFreezeImageButton.addActionListener(evt -> {
+			boolean t = model.toogleFreezeCalib3dImage();
 			toggleFreezeImageButton.setText(t? "unfreeze" : "freeze");
 		});
 
@@ -99,5 +99,5 @@ public class Calib3dView {
 	}
 
 	
-}    
+}
 

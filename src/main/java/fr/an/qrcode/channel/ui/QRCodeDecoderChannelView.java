@@ -41,7 +41,7 @@ import fr.an.qrcode.channel.ui.utils.TransparentFrameScreenArea;
 
 /**
  * a "QRCode(s) Decoder Channel to Text" view
- * 
+ *
  * cf QRCodeDecoderChannelModel
  *    QRCodesDecoderChannel
  */
@@ -50,7 +50,7 @@ public class QRCodeDecoderChannelView {
 	private static Logger LOG = LoggerFactory.getLogger(QRCodeDecoderChannelView.class);
 	
     private QRCodeDecoderChannelModel model;
-    
+
     private DecoderChannelListener uiEventListener = e -> onDecoderChannelEvent(e);
     private PropertyChangeListener propChangeListener = (evt) -> onModelPropChangeEvent(evt);
 
@@ -67,11 +67,11 @@ public class QRCodeDecoderChannelView {
 
     // for webcam recording
     private JPanel webcamParamsPanel;
-    
+
     // for screenshot recording
     private JPanel screenshotParamsPanel;
     private JButton revealRecordAreaButton;
-    
+
     private JButton resetButton;
     private JButton nextQRCodeButton;
     private JButton loopQRCodeButton;
@@ -86,15 +86,15 @@ public class QRCodeDecoderChannelView {
 
     private JPanel detailImageTabPanel;
     private ImageCanvas qrCodeImageCanvas;
-    
-    
+
+
     private JPanel infoPanel;
     private JLabel currentDecodeMessageLabel;
     private JLabel currentDecodeTimeMillisLabel;
     private JLabel currentChannelSequenceNumberLabel;
     private JTextArea currentAheadFragsInfoArea;
     private JTextArea recognitionStatsText;
-    
+
     private JLabel saveFileMessageLabel;
 
     private Calib3dView calib3dView;
@@ -111,7 +111,7 @@ public class QRCodeDecoderChannelView {
     }
 
     // ------------------------------------------------------------------------
-    
+
 	public Component getJComponent() {
 		return mainComponent;
 	}
@@ -127,7 +127,7 @@ public class QRCodeDecoderChannelView {
 
             recorderToolbar = new JToolBar();
             recorderTabPanel.add(recorderToolbar, BorderLayout.NORTH);
-            
+
             resetButton = new JButton("Reset");
             resetButton.addActionListener(e -> onReset());
             recorderToolbar.add(resetButton);
@@ -139,14 +139,14 @@ public class QRCodeDecoderChannelView {
             loopQRCodeButton = new JButton("Start Listen");
             recorderToolbar.add(loopQRCodeButton);
             loopQRCodeButton.addActionListener(e -> model.startListenSnapshots());
-            
+
             stopLoopQRCodeButton = new JButton("Stop");
             recorderToolbar.add(stopLoopQRCodeButton);
             stopLoopQRCodeButton.addActionListener(e -> model.stopListenSnapshots());
-                        
+
             recordAreaField = new JTextField();
             recorderToolbar.add(recordAreaField);
-            
+
             sourceScreenshotRadioButton = new JRadioButton("screen");
             recorderToolbar.add(sourceScreenshotRadioButton);
             sourceOpenCVRadioButton = new JRadioButton("opencv");
@@ -156,11 +156,11 @@ public class QRCodeDecoderChannelView {
             sourceScreenshotRadioButton.setSelected(model.getImageProviderMode() == ImageProviderMode.DesktopScreenshot);
             sourceOpenCVRadioButton.setSelected(model.getImageProviderMode() == ImageProviderMode.OpenCV);
             sourceWebcamRadioButton.setSelected(model.getImageProviderMode() == ImageProviderMode.WebCam);
-            
+
             sourceScreenshotRadioButton.addActionListener(e -> model.setImageProviderMode(ImageProviderMode.DesktopScreenshot));
             sourceOpenCVRadioButton.addActionListener(e -> model.setImageProviderMode(ImageProviderMode.OpenCV));
             sourceWebcamRadioButton.addActionListener(e -> model.setImageProviderMode(ImageProviderMode.WebCam));
-            
+
             sourceButtonGroup = new ButtonGroup();
             sourceButtonGroup.add(sourceScreenshotRadioButton);
             sourceButtonGroup.add(sourceOpenCVRadioButton);
@@ -177,7 +177,7 @@ public class QRCodeDecoderChannelView {
             revealRecordAreaButton = new JButton("reveal area");
             revealRecordAreaButton.addActionListener(e -> onRevealRecordAreaAction());
             recorderToolbar.add(revealRecordAreaButton);
-            
+
             clearTextButton = new JButton("ClearText");
             recorderToolbar.add(clearTextButton);
             clearTextButton.addActionListener(e -> onClearTextAction());
@@ -192,13 +192,13 @@ public class QRCodeDecoderChannelView {
             saveFileButton = new JButton("Save");
             saveFileButton.addActionListener(e -> onSaveFileAction());
             recorderToolbar.add(saveFileButton);
-            
+
             outputTextArea = new JTextArea();
             outputTextScrollPane = new JScrollPane(outputTextArea);
             recorderTabPanel.add(outputTextScrollPane, BorderLayout.CENTER);
-            
+
         }
-        
+
         { // detailImageTabPanel
             detailImageTabPanel = new JPanel(new BorderLayout());
 
@@ -206,35 +206,35 @@ public class QRCodeDecoderChannelView {
             qrCodeImageCanvas.setPreferredSize(new Dimension(400, 400));
             detailImageTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
         }
-        
+
         calib3dView = new Calib3dView(model.getCalib3dImageProvider());
-        
-        tabbedPane.add("recorder", recorderTabPanel);        
+
+        tabbedPane.add("recorder", recorderTabPanel);
         tabbedPane.add("img", detailImageTabPanel);
         tabbedPane.add("calib3d", calib3dView.getComp());
 
         infoPanel = new JPanel(new GridLayout(6, 1));
-        { 
+        {
 	        currentDecodeMessageLabel = new JLabel();
 	        infoPanel.add(currentDecodeMessageLabel);
-	        
+	
 	        currentDecodeTimeMillisLabel = new JLabel();
 	        infoPanel.add(currentDecodeTimeMillisLabel);
-	        
+	
 	        currentChannelSequenceNumberLabel = new JLabel();
 	        infoPanel.add(currentChannelSequenceNumberLabel);
-	        
+	
 	        currentAheadFragsInfoArea = new JTextArea(1, 50);
 	        infoPanel.add(currentAheadFragsInfoArea);
-	        
+	
 	        recognitionStatsText = new JTextArea(1, 50);
 	        infoPanel.add(recognitionStatsText);
-	        
+	
 	        saveFileMessageLabel = new JLabel();
 	        infoPanel.add(saveFileMessageLabel);
         }
         mainComponent.add(infoPanel, BorderLayout.SOUTH);
-        
+
         model2view();
     }
 
@@ -242,7 +242,7 @@ public class QRCodeDecoderChannelView {
     	model.reset();
     	onClearTextAction();
     }
-    
+
     private void onSetTextAction() {
         model.setFullText(outputTextArea.getText());
     }
@@ -251,7 +251,7 @@ public class QRCodeDecoderChannelView {
         model.setFullText("");
         outputTextArea.setText("");
     }
-    
+
     public void onSaveFileAction() {
     	String fileName = fileNameField.getText();
     	if (fileName == null) {
@@ -281,9 +281,9 @@ public class QRCodeDecoderChannelView {
 			}
     	}.execute();
     }
-    
+
     protected TransparentFrameScreenArea recordAreaFrame;
-    
+
     private void onRevealRecordAreaAction() {
         recordArea_viewToModel();
         if (recordAreaFrame == null) {
@@ -315,8 +315,8 @@ public class QRCodeDecoderChannelView {
         }
     }
 
-    
-    
+
+
     private void recordArea_viewToModel() {
         String recordParamsText = recordAreaField.getText();
         model.parseRecordParamsText(recordParamsText);
@@ -334,33 +334,33 @@ public class QRCodeDecoderChannelView {
 	        drawCurrCanvas();
 		} else {
 			// tochange? update all properties.. not efficient
-			model2view(); 
+			model2view();
 		}
 	}
 
     protected void onDecoderChannelEvent(DecoderChannelEvent event) {
     	model2view();
     }
-    
+
     private void model2view() {
         recordArea_modelToView();
-        
+
         currentDecodeMessageLabel.setText(model.getCurrDecodeMsg());
-//        currentDecodeTimeMillisLabel.setText(currentSnapshotResult != null? 
+//        currentDecodeTimeMillisLabel.setText(currentSnapshotResult != null?
 //        		TimeUnit.NANOSECONDS.toMillis(currentSnapshotResult.nanosCompute) + " ms" : "");
-        
+
         String fullText = model.getFullText();
         outputTextArea.setText(fullText);
-        
+
         currentChannelSequenceNumberLabel.setText("next seq number:" + model.getNextSequenceNumber());
         currentAheadFragsInfoArea.setText(model.getAheadFragsInfo());
 
         recognitionStatsText.setText(model.getRecognitionStatsText());
-        
+
         drawCurrCanvas();
-        
+
         Graphics g = qrCodeImageCanvas.getGraphics();
-        
+
         QRCapturedEvent qrEvent = model.getCurrQRCapturedEvent();
         if (qrEvent != null) {
         	for(QRResult qrResult : qrEvent.qrResults) {
@@ -383,9 +383,9 @@ public class QRCodeDecoderChannelView {
 //				g.drawOval(x-4, y-4, 8, 8);
 //        	}
 //        }
-        
+
         qrCodeImageCanvas.repaint();
-        
+
         // saveFileMessageLabel.setText();
     }
 

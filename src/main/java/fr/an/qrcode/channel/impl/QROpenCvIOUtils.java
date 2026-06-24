@@ -28,7 +28,7 @@ public class QROpenCvIOUtils {
 
 	public static Mat readText(BufferedReader in) throws IOException {
 		String[] line = in.readLine().split(" ");
-		int rows = Integer.parseInt(line[0]), cols = Integer.parseInt(line[1]), type = Integer.parseInt(line[2]); 
+		int rows = Integer.parseInt(line[0]), cols = Integer.parseInt(line[1]), type = Integer.parseInt(line[2]);
 		Mat res = new Mat(rows, cols, type);
 		readText(res, in);
 		return res;

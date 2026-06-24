@@ -9,14 +9,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.SwingUtilities;
 import javax.swing.event.SwingPropertyChangeSupport;
 
-import org.opencv.core.Mat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.zxing.DecodeHintType;
 
 import fr.an.qrcode.channel.impl.QRCodeUtils;
-import fr.an.qrcode.channel.impl.QROpenCvUtils;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel;
@@ -31,7 +29,7 @@ import fr.an.qrcode.channel.impl.util.DimInt2D;
 
 /**
  * model associated to QRCodeDecoderChannelView<BR/>
- * 
+ *
  * delegate all to underlying QRCodesDecoderChannel
  * wrap event callbacks with SwingUtilities.invokeLater
  * handle creation / reset of QRCodesDecoderChannel
@@ -42,7 +40,7 @@ public class QRCodeDecoderChannelModel {
 	
     private SwingPropertyChangeSupport pcs = new SwingPropertyChangeSupport(this);
     private DecoderChannelListener uiEventListener;
-    
+
     public static enum ImageProviderMode { DesktopScreenshot, OpenCV, WebCam };
     ImageProviderMode imageProviderMode =
 //    		ImageProviderMode.OpenCV;
@@ -55,17 +53,17 @@ public class QRCodeDecoderChannelModel {
     private String calib3dConfParamsName = "default-calib3d.data";
     OpenCvCalib3dImageProvider calib3dImageProvider;
     OpenCvCalib3d calib3d;
-    
+
     private Map<DecodeHintType, Object> qrDecoderHints = QRCodeUtils.createDefaultDecoderHints();
-    
+
     private QRCodesDecoderChannel decoderChannel;
 
     private String fullText = "";
     private BufferedImage currentScreenshotImg;
-    private String currDecodeMsg;    
+    private String currDecodeMsg;
     private String recognitionStatsText;
     private QRCapturedEvent currQRCapturedEvent;
-    
+
 	private AtomicBoolean pendingRefresh = new AtomicBoolean();
 
     // ------------------------------------------------------------------------
@@ -81,16 +79,16 @@ public class QRCodeDecoderChannelModel {
     		log.info("reset");
     		this.decoderChannel.stopListenSnapshots();
     	}
-    	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints, 
+    	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints,
     			getImageProvider(), e -> onDecoderChannelEvent(e));
     	this.currentScreenshotImg = null;
     	setFullText("");
     }
-    
+
     public void setUiEventListener(DecoderChannelListener uiEventListener) {
-    	this.uiEventListener = uiEventListener; 
+    	this.uiEventListener = uiEventListener;
     }
-    
+
     protected ImageProvider getImageProvider() {
     	switch(imageProviderMode) {
     	case DesktopScreenshot: return desktopImageProvider;
@@ -113,11 +111,11 @@ public class QRCodeDecoderChannelModel {
     	default: throw new IllegalStateException();
     	}
     }
-    
+
     public ImageProviderMode getImageProviderMode() {
     	return imageProviderMode;
     }
-    
+
 	public void setImageProviderMode(ImageProviderMode mode) {
 		if (mode != this.imageProviderMode) { 	
 			this.imageProviderMode = mode;
@@ -137,6 +135,7 @@ public class QRCodeDecoderChannelModel {
     				// this.nextSequenceNumber = this.decoderChannel.getNextSequenceNumber();
     				// startTime;
 		    		// timeMillis;
+    				// setCurrentScreenshotImg(event.qrEvent.image);
 		    		this.currentScreenshotImg = event.qrEvent.image;
 		    		this.fullText = event.readyText;
 		    		
@@ -151,7 +150,7 @@ public class QRCodeDecoderChannelModel {
 	    	});
     	}
     }
-    
+
     public void addPropertyChangeListener(PropertyChangeListener listener) {
 		pcs.addPropertyChangeListener(listener);
 	}
@@ -170,13 +169,13 @@ public class QRCodeDecoderChannelModel {
     }
 
     public void setFullText(String p) {
-    	String prev = fullText; 
+    	String prev = fullText;
         this.fullText = p;
         pcs.firePropertyChange("fullText", prev, p);
     }
 
 	public void setCurrentScreenshotImg(BufferedImage p) {
-		BufferedImage prev = currentScreenshotImg; 
+		BufferedImage prev = currentScreenshotImg;
 		this.currentScreenshotImg = p;
         pcs.firePropertyChange("currentScreenshotImg", prev, p);
 	}
@@ -193,7 +192,7 @@ public class QRCodeDecoderChannelModel {
 		return currQRCapturedEvent;
 	}
 
-	// delegate to calib3d 
+	// delegate to calib3d
 	// --------------------------------------------------------------------------------------------
 
 	public OpenCvCalib3d getCalib3d() {
@@ -228,7 +227,7 @@ public class QRCodeDecoderChannelModel {
 	}
 	
 	
-	// delegate to decoderChannel 
+	// delegate to decoderChannel
 	// --------------------------------------------------------------------------------------------
 
 	public QRCodesDecoderChannel getDecoderChannel() {

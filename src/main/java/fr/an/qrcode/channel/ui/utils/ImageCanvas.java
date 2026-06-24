@@ -35,7 +35,7 @@ public class ImageCanvas extends JComponent {
 	@Override
 	public void paint(Graphics g) {
 		int w = this.getWidth(), h = this.getHeight();
-		int min = Math.min(w, h); 
+		int min = Math.min(w, h);
 		if (image != null) {
 			g.drawImage(image, 0, 0, min, min, this);
 		} else {

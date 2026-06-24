@@ -2,6 +2,7 @@ package fr.an.qrcode.channel.impl.decode.input;
 
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -34,23 +35,18 @@ public class WebcamImageProvider extends ImageProvider {
 	}
 
 	public static WebcamImageProvider createDefault() {
-		Webcam webcam;
+		List<Webcam> webcams;
 		try {
-			webcam = Webcam.getDefault(10, TimeUnit.SECONDS);
+			webcams = Webcam.getWebcams(10, TimeUnit.SECONDS);
 		} catch (WebcamException | TimeoutException ex) {
 			throw new IllegalStateException("Failed to detect webcam", ex);
 		}
-		if (webcam == null) {
+		if (webcams == null || webcams.size()==0) {
 			throw new IllegalStateException("No detected webcam");
 		}
-
-		Dimension[] viewSizes = webcam.getViewSizes();
-		Dimension bestViewSize = viewSizes[0];
-		for(Dimension viewSize : viewSizes) {
-			if (viewSize.getHeight()*viewSize.getWidth() > bestViewSize.getHeight()*bestViewSize.getWidth()) {
-				bestViewSize = viewSize;
-			}
-		}
+		Webcam webcam = chooseDefaultWebcam(webcams);
+		
+		Dimension bestViewSize = bestWebcamViewSize(webcam);
 		Dimension currViewSize = webcam.getViewSize();
 		if (currViewSize == null || ! currViewSize.equals(bestViewSize)) {
 			log.info("changing viewSize:" + currViewSize + " -> " + bestViewSize);
@@ -65,6 +61,33 @@ public class WebcamImageProvider extends ImageProvider {
 		return new WebcamImageProvider(webcam);
 	}
 
+	public static Webcam chooseDefaultWebcam(List<Webcam> webcams) {
+		// Webcam webcam = webcams.get(webcams.size() - 1);
+		long bestViewArea = 0;
+		Webcam webcam = null;
+		for(Webcam w: webcams) {
+			Dimension viewSize = w.getViewSize();
+			log.info("webcam:" + w);
+			long area = (long)viewSize.width * viewSize.height;
+			if (area > bestViewArea) {
+				bestViewArea = area;
+				webcam = w;
+			}
+		}
+		return webcam;
+	}	
+
+	private static Dimension bestWebcamViewSize(Webcam webcam) {
+		Dimension[] viewSizes = webcam.getViewSizes();
+		Dimension bestViewSize = viewSizes[0];
+		for(Dimension viewSize : viewSizes) {
+			if (viewSize.getHeight()*viewSize.getWidth() > bestViewSize.getHeight()*bestViewSize.getWidth()) {
+				bestViewSize = viewSize;
+			}
+		}
+		return bestViewSize;
+	}
+	
 	// --------------------------------------------------------------------------------------------
 	
 	@Override

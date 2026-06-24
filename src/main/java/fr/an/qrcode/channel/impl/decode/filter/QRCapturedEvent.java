@@ -6,7 +6,7 @@ import java.util.List;
 import fr.an.qrcode.channel.impl.decode.QRResult;
 
 /**
- * 
+ *
  */
 public class QRCapturedEvent {
 

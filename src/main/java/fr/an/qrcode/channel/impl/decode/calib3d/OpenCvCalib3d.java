@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 import fr.an.qrcode.channel.impl.QROpenCvIOUtils;
 
 /**
- * 
+ *
  * https://github.com/opencv/opencv/blob/master/samples/android/camera-calibration/src/org/opencv/samples/cameracalibration/CameraCalibrator.java
  * https://opencv-java-tutorials.readthedocs.io/en/latest/09-camera-calibration.html
  */
@@ -43,7 +43,7 @@ public class OpenCvCalib3d {
 	private static final Logger log = LoggerFactory.getLogger(OpenCvCalib3d.class);
 
 	private int flagsCorner = Calib3d.CALIB_CB_ADAPTIVE_THRESH
-//            | Calib3d.CALIB_CB_FAST_CHECK 
+//            | Calib3d.CALIB_CB_FAST_CHECK
             | Calib3d.CALIB_CB_NORMALIZE_IMAGE;
 
 	private int flagsCalib = Calib3d.CALIB_ZERO_TANGENT_DIST
@@ -51,7 +51,7 @@ public class OpenCvCalib3d {
 //            | Calib3d.CALIB_FIX_ASPECT_RATIO
             | Calib3d.CALIB_FIX_K4
             | Calib3d.CALIB_FIX_K5;
-    
+
 	private static final Size winSize = new Size(5, 5), zoneSize = new Size(-1, -1);
     private static final TermCriteria criteria = new TermCriteria(TermCriteria.EPS + TermCriteria.MAX_ITER, 40, 0.001);
 
@@ -60,15 +60,15 @@ public class OpenCvCalib3d {
 
     private final Size mPatternSize = new Size(7, 7); // internals corners of 8x8 chessboard!
     private final int mCornersSize = (int)(mPatternSize.width * mPatternSize.height);
-    
+
     private final MatOfPoint3f referenceChessboardCorners3dMat;
-    
+
     private List<Mat> objectPoints = new ArrayList<>();  // MatOfPoint3f
     private List<Mat> imagePoints = new ArrayList<>(); // Point2f
-    
+
     private MatOfPoint2f currImageChessboardCorners = new MatOfPoint2f();
     private boolean currImageChessboardCornersFound = false;
-    
+
     private boolean mIsCalibrated = false;
     private Mat mCameraMatrix = new Mat();
     private Mat mDistortionCoefficients = new Mat();
@@ -82,7 +82,7 @@ public class OpenCvCalib3d {
         Mat.eye(3, 3, CvType.CV_64FC1).copyTo(mCameraMatrix);
         mCameraMatrix.put(0, 0, 1.0);
         Mat.zeros(5, 1, CvType.CV_64FC1).copyTo(mDistortionCoefficients);
-        
+
         referenceChessboardCorners3dMat = newReferenceChessboardCorners_VectorPoint3((int)mPatternSize.width, (int)mPatternSize.height);
     }
 
@@ -103,10 +103,10 @@ public class OpenCvCalib3d {
     public void clearCorners() {
         objectPoints.clear();
         imagePoints.clear();
-        
+
         mIsCalibrated = false;
     }
-    
+
     public void undistort(Mat src, Mat dest) {
 	    if (this.mIsCalibrated) {
 	    	Calib3d.undistort(src, dest, mCameraMatrix, mDistortionCoefficients);
@@ -114,7 +114,7 @@ public class OpenCvCalib3d {
 	    	src.copyTo(dest);
 	    }
     }
-    
+
     public void processFrame(Mat grayFrame, Mat displayRgbaFrame) {
     	findAndAddChessboardCorners(grayFrame);
         if (displayRgbaFrame != null) {
@@ -122,7 +122,7 @@ public class OpenCvCalib3d {
         }
     }
 
-    
+
     protected void findAndAddChessboardCorners(Mat imgMat) {
     	currImageChessboardCorners = new MatOfPoint2f();
     	currImageChessboardCornersFound = Calib3d.findChessboardCorners(imgMat, mPatternSize, currImageChessboardCorners, flagsCorner);
@@ -139,7 +139,7 @@ public class OpenCvCalib3d {
 	}
 
 
-    
+
     public void calibrate() {
 		if (objectPoints.size() < 10) {
     		log.info("not enough image points .. skip calibrate!");
@@ -148,7 +148,7 @@ public class OpenCvCalib3d {
     	
         List<Mat> rvecs = new ArrayList<>();
         List<Mat> tvecs = new ArrayList<>();
-        errReproj = Calib3d.calibrateCamera(objectPoints, imagePoints, 
+        errReproj = Calib3d.calibrateCamera(objectPoints, imagePoints,
         		mImageSize, mCameraMatrix, mDistortionCoefficients, rvecs, tvecs, flagsCalib);
 
         mIsCalibrated = Core.checkRange(mCameraMatrix)
@@ -184,15 +184,15 @@ public class OpenCvCalib3d {
 //        return Math.sqrt(totalError / totalPoints);
 //    }
 
-    
-  
-    
-    
+
+
+
+
 
     private void renderFrame(Mat displayMat) {
         Calib3d.drawChessboardCorners(displayMat, mPatternSize, currImageChessboardCorners, currImageChessboardCornersFound);
 
-        Imgproc.putText(displayMat, "Captured: " + imagePoints.size(), 
+        Imgproc.putText(displayMat, "Captured: " + imagePoints.size(),
         		new Point(displayMat.cols() / 3 * 2, displayMat.rows() * 0.1),
                 Imgproc.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(255, 255, 0));
     }

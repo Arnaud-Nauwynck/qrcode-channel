@@ -9,7 +9,7 @@ public class DecoderChannelEvent {
 
 	public final QRCapturedEvent qrEvent;
 	
-	public DecoderChannelEvent(String currDecodeMsg,  
+	public DecoderChannelEvent(String currDecodeMsg,
 			String readyText,
 			QRCapturedEvent qrEvent) {
 		super();

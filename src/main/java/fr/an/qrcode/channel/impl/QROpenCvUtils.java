@@ -37,17 +37,17 @@ public class QROpenCvUtils {
 		byte[] data = ((DataBufferByte) dest.getRaster().getDataBuffer()).getData();
 	    src.get(0, 0, data);
 	}
-    
+
 	
 	public static Mat imgINT_RGB_toMat(BufferedImage img) {
-        int w = img.getWidth(), h = img.getHeight();  
+        int w = img.getWidth(), h = img.getHeight();
 		Mat out = new Mat(h, w, CvType.CV_8UC3);
 		imgINT_RGB_toMat(img, out);
 		return out;
      }
 
 	public static void imgINT_RGB_toMat(BufferedImage img, Mat out) {
-        int w = img.getWidth(), h = img.getHeight();  
+        int w = img.getWidth(), h = img.getHeight();
 		byte[] data = new byte[w * h * (int)out.elemSize()];
 		int[] dataBuff = img.getRGB(0, 0, w, h, null, 0, w);
 		final int dataLen = dataBuff.length;

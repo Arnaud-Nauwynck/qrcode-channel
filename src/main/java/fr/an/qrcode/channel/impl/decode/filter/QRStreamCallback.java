@@ -8,5 +8,5 @@ public abstract class QRStreamCallback {
 	public void onEnd() {}
 
 	public abstract void onQRCaptured(QRCapturedEvent event);
-    
+
 }

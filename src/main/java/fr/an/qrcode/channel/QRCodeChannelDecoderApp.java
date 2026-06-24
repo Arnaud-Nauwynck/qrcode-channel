@@ -21,20 +21,20 @@ public class QRCodeChannelDecoderApp {
             ex.printStackTrace(System.err);
         }
     }
-    
+
     public static void doMain(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
             	QRCodeDecoderChannelModel model = new QRCodeDecoderChannelModel();
                 QRCodeDecoderChannelView view = new QRCodeDecoderChannelView(model);
-                
+
                 JFrame frame = new JFrame();
                 frame.getContentPane().add(view.getJComponent());
-                
+
                 frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
                 frame.pack();
                 frame.setVisible(true);
-                
+
                 frame.setBounds(new Rectangle(0, 50, 920, 900));
             }
         });

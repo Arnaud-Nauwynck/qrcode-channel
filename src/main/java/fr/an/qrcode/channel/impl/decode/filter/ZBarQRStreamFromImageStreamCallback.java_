@@ -26,11 +26,11 @@ import net.sourceforge.zbar.Symbol;
 import net.sourceforge.zbar.SymbolSet;
 
 /**
- * <PRE>          -------                     -------                   -------    
- *               |       |                   |       |                 |       |   
+ * <PRE>          -------                     -------                   -------
+ *               |       |                   |       |                 |       |
  *  --RGBImage-->|       |-->Binary Bitmap-->|       |-->QR Detected-->|       |-->QR Decoded
- *               |       |                   |       |                 |       |   
- *                -------                     -------                   -------    
+ *               |       |                   |       |                 |       |
+ *                -------                     -------                   -------
  * </PRE>
  *
  */
@@ -73,7 +73,7 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	private BitMatrix previousBitMatrix;
 	
 
-    private Result currQrResult; 
+    private Result currQrResult;
     private long currNanosDecode;
     private DetectorResult currDetectorResult;
     private long currNanosDetect;
@@ -85,13 +85,13 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	
     private QRDecodeRollingStats rollingStats = new QRDecodeRollingStats();
 
-    
-    
+
+
 	
 	// --------------------------------------------------------------------------------------------
 	
 	public ZBarQRStreamFromImageStreamCallback(
-			QRStreamCallback delegate, 
+			QRStreamCallback delegate,
 			int samplingLen
 			) {
 		this.delegateQRStream = delegate;
@@ -152,7 +152,7 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 		final int w = imgRaster.getWidth(), h = imgRaster.getHeight();
 		for(int y = 0, i=0, gi=0; y < h; y++) {
 			for(int x = 0; x < w; x++,i+=3,gi++) {
-//				byte r = imgData[i], g = imgData[i+1], b = imgData[i+2];  
+//				byte r = imgData[i], g = imgData[i+1], b = imgData[i+2];
 				int rgb = img.getRGB(x, y);
 				int checkr = ((rgb >> 16) & 0xFF), checkg = ((rgb >> 8) & 0xFF), checkb = (rgb & 0xFF);
 //				if (checkr != r || checkg != g || checkb != b) {
@@ -163,7 +163,7 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 				int r=checkr, g = checkg, b = checkb;
 				
 				// cf ZXing BufferedImageLuminance
-				// .299R + 0.587G + 0.114B (YUV/YIQ for PAL and NTSC), 
+				// .299R + 0.587G + 0.114B (YUV/YIQ for PAL and NTSC),
 				// (306*R) >> 10 is approximately equal to R*0.299, and so on.
 				// 0x200 >> 10 is 0.5, it implements rounding.
 				int gray = (306 * r + 601 * g + 117 * b + 0x200) >> 10;
@@ -222,7 +222,7 @@ public class ZBarQRStreamFromImageStreamCallback extends ImageStreamCallback {
 //				System.out.print(Integer.toString(qrResultCount));
 //			}
 
-			String prevText = (prevQRResultCount == 0)? "-" : ((prevQRResultCount == 1)? "+" : "++"); 
+			String prevText = (prevQRResultCount == 0)? "-" : ((prevQRResultCount == 1)? "+" : "++");
 			if (coutPrevRepeat > 1) {
 				System.out.print(prevText + coutPrevRepeat + " ");
 			} else {

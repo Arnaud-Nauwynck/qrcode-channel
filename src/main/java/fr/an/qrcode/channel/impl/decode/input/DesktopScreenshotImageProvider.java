@@ -11,12 +11,12 @@ import java.util.zip.CRC32;
 import fr.an.qrcode.channel.impl.util.DimInt2D;
 import fr.an.qrcode.channel.ui.utils.DesktopScreenSnaphotProvider;
 
-public class DesktopScreenshotImageProvider extends ImageProvider { 
+public class DesktopScreenshotImageProvider extends ImageProvider {
 	
 	private DesktopScreenSnaphotProvider screenSnaphostProvider = new DesktopScreenSnaphotProvider(false, true);
 
     private long currentScreenshotImgCrc32;
-    
+
 	@Override
 	public void open() {
 	}

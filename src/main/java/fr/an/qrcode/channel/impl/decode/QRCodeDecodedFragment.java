@@ -4,12 +4,12 @@ public class QRCodeDecodedFragment {
 
 	private QRCodesDecoderChannel owner;
 	private final int fragmentNumber;
-	
+
     private final String fragmentHeaderText;
-    private final String data;
+    private final byte[] data;
 
     public QRCodeDecodedFragment(QRCodesDecoderChannel owner, int fragmentNumber,
-			String fragmentHeaderText, String data) {
+			String fragmentHeaderText, byte[] data) {
 		this.owner = owner;
 		this.fragmentNumber = fragmentNumber;
 		this.fragmentHeaderText = fragmentHeaderText;
@@ -32,8 +32,8 @@ public class QRCodeDecodedFragment {
 		return fragmentHeaderText;
 	}
 
-	public String getData() {
+	public byte[] getData() {
 		return data;
 	}
-    
+
 }

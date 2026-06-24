@@ -19,6 +19,6 @@ public class QRResult {
 		this.rawBytes = rawBytes;
 		this.resultPoints = resultPoints;
 	}
-	  
+	
 	
 }

@@ -9,10 +9,10 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 
 public class QREncodeSetting {
 
-    private BarcodeFormat qrCodeFormat = 
+    private BarcodeFormat qrCodeFormat =
     		BarcodeFormat.QR_CODE;
-    
-    private int qrVersion = 
+
+    private int qrVersion =
 //    		6;
 // 			7;
 //    		8;
@@ -23,23 +23,31 @@ public class QREncodeSetting {
 // 			20;
 //    		30;
 //			40;
-    
-    private ErrorCorrectionLevel errorCorrectionLevel = 
+
+    private ErrorCorrectionLevel errorCorrectionLevel =
 //    		ErrorCorrectionLevel.Q; // ~ 25%
     		ErrorCorrectionLevel.H; // ~ 30%
 
     private Map<EncodeHintType, Object> qrHints;
-    
+
     private int qrCodeW = 17 + 4*qrVersion; // cf com.google.zxing.qrcode.decoder.Version.getDimensionForVersion()
     private int qrCodeH = qrCodeW;
-    
-    
+
+    // FEC-like redundancy: additionally emit "combo" packets that XOR together consecutive plain fragments,
+    // so the decoder can recover one missing fragment per combo without needing a re-transmission.
+    private boolean comboRedundancyEnabled = false;
+    private int[] comboCodes = new int[] { 2 };
+    private int comboEmitEveryNFragments = 4;
+
+
     public QREncodeSetting() {
 		qrHints = new HashMap<>();
         if (errorCorrectionLevel != null) {
             qrHints.put(EncodeHintType.ERROR_CORRECTION, errorCorrectionLevel);
-        }        
+        }
         qrHints.put(EncodeHintType.QR_VERSION, qrVersion);
+        // payload is wrapped as ISO-8859-1 text to carry arbitrary bytes (incl. XOR combo data) losslessly through ZXing's String API
+        qrHints.put(EncodeHintType.CHARACTER_SET, "ISO-8859-1");
    	}
 
 	public BarcodeFormat getQrCodeFormat() {
@@ -66,5 +74,28 @@ public class QREncodeSetting {
 		return qrCodeH;
 	}
 
-    
+	public boolean isComboRedundancyEnabled() {
+		return comboRedundancyEnabled;
+	}
+
+	public void setComboRedundancyEnabled(boolean p) {
+		this.comboRedundancyEnabled = p;
+	}
+
+	public int[] getComboCodes() {
+		return comboCodes;
+	}
+
+	public void setComboCodes(int[] p) {
+		this.comboCodes = p;
+	}
+
+	public int getComboEmitEveryNFragments() {
+		return comboEmitEveryNFragments;
+	}
+
+	public void setComboEmitEveryNFragments(int p) {
+		this.comboEmitEveryNFragments = p;
+	}
+
 }

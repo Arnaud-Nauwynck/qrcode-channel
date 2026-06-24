@@ -19,8 +19,8 @@ public class AvgFilterImageProvider extends ImageProvider {
 
 	private ImageProvider delegate;
 
-	private BufferedImage prevImg; 
-	private BufferedImage imgAvg; 
+	private BufferedImage prevImg;
+	private BufferedImage imgAvg;
 
 	// --------------------------------------------------------------------------------------------
 	

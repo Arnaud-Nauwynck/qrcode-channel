@@ -27,13 +27,13 @@ public class QRCodeChannelEncoderApp {
             ex.printStackTrace(System.err);
         }
     }
-    
+
     public static void doMain(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
             	QRCodeEncoderChannelModel model = new QRCodeEncoderChannelModel(new QREncodeSetting());
                 QRCodeEncoderChannelView view = new QRCodeEncoderChannelView(model);
-                
+
                 String content;
                 try {
                 	content = FileUtils.readFileToString(new File("pom.xml"));
@@ -41,14 +41,14 @@ public class QRCodeChannelEncoderApp {
 					content = "ERROR";
 				}
                 model.computeQRCodes(content);
-                
+
                 JFrame frame = new JFrame();
                 frame.getContentPane().add(view.getJComponent());
-                
+
                 frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
                 frame.pack();
                 frame.setVisible(true);
-                
+
                 frame.setBounds(new Rectangle(1000, 50, 900, 900));
             }
 

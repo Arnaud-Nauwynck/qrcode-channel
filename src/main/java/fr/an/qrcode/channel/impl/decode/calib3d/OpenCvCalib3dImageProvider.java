@@ -15,7 +15,7 @@ import fr.an.qrcode.channel.impl.util.DimInt2D;
 import fr.an.qrcode.channel.impl.util.PtInt2D;
 
 /**
- * 
+ *
  */
 public class OpenCvCalib3dImageProvider extends ImageProvider {
 	

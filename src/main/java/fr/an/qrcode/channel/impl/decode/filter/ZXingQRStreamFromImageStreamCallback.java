@@ -1,11 +1,11 @@
 package fr.an.qrcode.channel.impl.decode.filter;
 
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -32,16 +32,18 @@ import com.google.zxing.qrcode.decoder.Decoder;
 import com.google.zxing.qrcode.decoder.QRCodeDecoderMetaData;
 import com.google.zxing.qrcode.detector.Detector;
 
+import fr.an.qrcode.channel.impl.decode.QRResult;
 import fr.an.qrcode.channel.impl.decode.filter.QRDecodeRollingStats.Bucket;
 import fr.an.qrcode.channel.impl.decode.input.ImageStreamCallback;
 import fr.an.qrcode.channel.impl.util.DimInt2D;
+import fr.an.qrcode.channel.impl.util.PtInt2D;
 
 /**
- * <PRE>          -------                     -------                   -------    
- *               |       |                   |       |                 |       |   
+ * <PRE>          -------                     -------                   -------
+ *               |       |                   |       |                 |       |
  *  --RGBImage-->|       |-->Binary Bitmap-->|       |-->QR Detected-->|       |-->QR Decoded
- *               |       |                   |       |                 |       |   
- *                -------                     -------                   -------    
+ *               |       |                   |       |                 |       |
+ *                -------                     -------                   -------
  * </PRE>
  *
  */
@@ -62,6 +64,7 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	private Map<DecodeHintType, Object> qrHints;
 	private Decoder decoder;
 	
+    private static final List<QRResult> EMPTY_qrResults = Collections.emptyList();
 	
 
 	private static class ImageSampling {
@@ -85,7 +88,7 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	private BitMatrix previousBitMatrix;
 	
 
-    private Result currQrResult; 
+    private Result currQrResult;
     private long currNanosDecode;
     private DetectorResult currDetectorResult;
     private long currNanosDetect;
@@ -96,26 +99,26 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
     private long currNanosSnapshot;
 	
     private QRDecodeRollingStats rollingStats = new QRDecodeRollingStats();
-    
-    private Executor executor1 = new ThreadPoolExecutor(1, 1, // 1 thread
-            0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<Runnable>(10)); // max 10 waiting work items
 
-    private Executor executor2 = new ThreadPoolExecutor(1, 1, // 1 thread
-            0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<Runnable>(10)); // max 10 waiting work items
+//    private Executor executor1 = new ThreadPoolExecutor(1, 1, // 1 thread
+//            0L, TimeUnit.MILLISECONDS,
+//            new LinkedBlockingQueue<Runnable>(10)); // max 10 waiting work items
+//
+//    private Executor executor2 = new ThreadPoolExecutor(1, 1, // 1 thread
+//            0L, TimeUnit.MILLISECONDS,
+//            new LinkedBlockingQueue<Runnable>(10)); // max 10 waiting work items
+//
+//    private Executor executor3 = new ThreadPoolExecutor(1, 1, // 1 thread
+//            0L, TimeUnit.MILLISECONDS,
+//            new LinkedBlockingQueue<Runnable>(10)); // max 10 waiting work items
 
-    private Executor executor3 = new ThreadPoolExecutor(1, 1, // 1 thread
-            0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<Runnable>(10)); // max 10 waiting work items
 
-    
-    
+
 	
 	// --------------------------------------------------------------------------------------------
 	
 	public ZXingQRStreamFromImageStreamCallback(
-			QRStreamCallback delegate, 
+			QRStreamCallback delegate,
 			int samplingLen,
 			Map<DecodeHintType, Object> qrHints) {
 		this.delegateQRStream = delegate;
@@ -200,7 +203,7 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 //	    		for(int x = 0; x < w; i++,x++) {
 //	    			int v2 = sI.get(x, y);
 //	    			int v = asByteBuffer.get();
-//	    			if (v != v2) 
+//	    			if (v != v2)
 //	    				throw new IllegalStateException();
 //	    			if (v != 0) {
 //	    				binaryMatrix.set(x, y);	    				
@@ -215,11 +218,16 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	    } catch(Exception ex) {
 	    	log.warn("failed?", ex);
 	    	bucketStats.incrCountQRPacketNotFound(); // should not occur?
+
+        	long nanosDecode = 0;
+            QRCapturedEvent qrCapturedEvent = new QRCapturedEvent(
+            		EMPTY_qrResults, nanosDecode, img, nanosSnapshot, nanosSnapshotTime);
+            delegateQRStream.onQRCaptured(qrCapturedEvent);
 	    	return;
 	    }
-	    
+	
 	    // sampling.binaryMatrix = binaryMatrix;
-	    
+	
 	    boolean dropImage = false;
     	if (previousBitMatrix != null && previousBitMatrix.equals(binaryMatrix)) {
     		dropImage = true;
@@ -229,7 +237,7 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
     	previousBitMatrix = binaryMatrix;
     	long nanosBinarize = System.nanoTime() - nanosBeforeBinarize;
 		
-	    
+	
 	    if (dropImage) {
 			bucketStats.incrCountImageDropped();
 			
@@ -237,8 +245,6 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	    } else {
 	    	// delegateQRStream.onImage(image, sampling.bitmap, nanosTime, nanos);
 //        	qrResult = qrCodeReader.decode(bitmap, qrHints);
-
-	    	Result qrResult;
 
 	    	DetectorResult detectorResult;
 	    	BitMatrix qrbits;
@@ -253,7 +259,7 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 //	            FinderPatternInfo info = finder.find(qrHints);
 //	            detectorResult = processFinderPatternInfo(info);
 //				qrbits = detectorResult.getBits();
-	            
+	
 				
 	        	nanosDetect = System.nanoTime() - nanosBeforeDetect;
 	        	
@@ -266,10 +272,16 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	        	} else {
 	        		bucketStats.incrCountQRPacketNotFound();
 	        	}
+
+	        	long nanosDecode = 0;
+	            QRCapturedEvent qrCapturedEvent = new QRCapturedEvent(
+	            		EMPTY_qrResults, nanosDecode, img, nanosSnapshot, nanosSnapshotTime);
+	            delegateQRStream.onQRCaptured(qrCapturedEvent);
+
 		    	return;
 	        }
-	        
-	        
+	
+	
 	        long nanosBeforeDecode = System.nanoTime();
 	        long nanosDecode;
 	        DecoderResult decoderResult;
@@ -290,6 +302,11 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
 	        		// currDecodeMsg = "\n<<<<<<<< FAILED to decode QRCode: FormatException >>>>>>>>>>>>\n";
 	        		bucketStats.incrCountQRPacketChecksumException();
 	        	}
+	        	
+	            QRCapturedEvent qrCapturedEvent = new QRCapturedEvent(
+	            		EMPTY_qrResults, nanosDecode, img, nanosSnapshot, nanosSnapshotTime);
+	            delegateQRStream.onQRCaptured(qrCapturedEvent);
+
 		    	return;
 	        }
 
@@ -297,16 +314,26 @@ public class ZXingQRStreamFromImageStreamCallback extends ImageStreamCallback {
             bucketStats.incrCountQRPacketRecognized();
 
             ResultPoint[] pts = detectorResult.getPoints();
-            
-            qrResult = new Result(decoderResult.getText(), decoderResult.getRawBytes(), detectorResult.getPoints(), BarcodeFormat.QR_CODE);
-            this.currQrResult = qrResult;
-            
-            // TODO
-//            delegateQRStream.onQRCaptured(new QRCapturedEvent(
-//            		qrResult, nanosDecode,
-//            		detectorResult, nanosDetect,
-//	    			binaryMatrix, nanosBinarize, 
-//	    			img, nanosSnapshotTime, nanosSnapshot));
+
+	    	Result xingResult = new Result(decoderResult.getText(),
+	    			decoderResult.getRawBytes(), detectorResult.getPoints(), BarcodeFormat.QR_CODE);
+            this.currQrResult = xingResult;
+
+            ResultPoint[] xingResultPoints = xingResult.getResultPoints();
+            List<PtInt2D> resultPts = new ArrayList<>();
+            if (xingResultPoints != null) {
+            	for(ResultPoint pt: xingResultPoints) {
+            		resultPts.add(new PtInt2D((int) pt.getX(), (int) pt.getY()));
+            	}
+            }
+
+			QRResult qrResult = new QRResult(xingResult.getText(), null, resultPts );
+            List<QRResult> qrResults = Arrays.asList(qrResult);
+            QRCapturedEvent qrCapturedEvent = new QRCapturedEvent(
+            		qrResults, nanosDecode,
+            		img, nanosSnapshot, nanosSnapshotTime
+            		);
+            delegateQRStream.onQRCaptured(qrCapturedEvent);
 	    }
 	}
 
