@@ -266,4 +266,8 @@ public class QRCodeDecoderChannelModel {
 		return currDecodeMsg;
 	}
 
+	public java.util.List<QRCodesDecoderChannel.FragmentState> getFragmentStates() {
+		return decoderChannel.getFragmentStates();
+	}
+
 }

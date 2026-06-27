@@ -1,6 +1,7 @@
 package fr.an.qrcode.channel.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics;
@@ -32,11 +33,13 @@ import org.slf4j.LoggerFactory;
 
 import fr.an.qrcode.channel.impl.decode.DecoderChannelEvent;
 import fr.an.qrcode.channel.impl.decode.DecoderChannelListener;
+import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.FragmentState;
 import fr.an.qrcode.channel.impl.decode.QRResult;
 import fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent;
 import fr.an.qrcode.channel.impl.util.PtInt2D;
 import fr.an.qrcode.channel.ui.QRCodeDecoderChannelModel.ImageProviderMode;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
+import fr.an.qrcode.channel.ui.utils.SquaresStripPanel;
 import fr.an.qrcode.channel.ui.utils.TransparentFrameScreenArea;
 
 /**
@@ -96,6 +99,8 @@ public class QRCodeDecoderChannelView {
     private JTextArea recognitionStatsText;
 
     private JLabel saveFileMessageLabel;
+
+    private SquaresStripPanel<FragmentState> fragmentsStatusPanel;
 
     private Calib3dView calib3dView;
 
@@ -203,7 +208,7 @@ public class QRCodeDecoderChannelView {
             detailImageTabPanel = new JPanel(new BorderLayout());
 
             qrCodeImageCanvas = new ImageCanvas();
-            qrCodeImageCanvas.setPreferredSize(new Dimension(400, 400));
+            qrCodeImageCanvas.setPreferredSize(new Dimension(250, 250));
             detailImageTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
         }
 
@@ -213,23 +218,29 @@ public class QRCodeDecoderChannelView {
         tabbedPane.add("img", detailImageTabPanel);
         tabbedPane.add("calib3d", calib3dView.getComp());
 
-        infoPanel = new JPanel(new GridLayout(6, 1));
+        infoPanel = new JPanel(new GridLayout(7, 1));
         {
 	        currentDecodeMessageLabel = new JLabel();
 	        infoPanel.add(currentDecodeMessageLabel);
-	
+
 	        currentDecodeTimeMillisLabel = new JLabel();
 	        infoPanel.add(currentDecodeTimeMillisLabel);
-	
+
 	        currentChannelSequenceNumberLabel = new JLabel();
 	        infoPanel.add(currentChannelSequenceNumberLabel);
-	
+
 	        currentAheadFragsInfoArea = new JTextArea(1, 50);
 	        infoPanel.add(currentAheadFragsInfoArea);
-	
+
 	        recognitionStatsText = new JTextArea(1, 50);
 	        infoPanel.add(recognitionStatsText);
-	
+
+	        fragmentsStatusPanel = new SquaresStripPanel<>(5, 1, QRCodeDecoderChannelView::colorForFragmentState);
+	        JScrollPane fragmentsStatusScrollPane = new JScrollPane(fragmentsStatusPanel);
+	        fragmentsStatusScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+	        fragmentsStatusScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+	        infoPanel.add(fragmentsStatusScrollPane);
+
 	        saveFileMessageLabel = new JLabel();
 	        infoPanel.add(saveFileMessageLabel);
         }
@@ -357,6 +368,8 @@ public class QRCodeDecoderChannelView {
 
         recognitionStatsText.setText(model.getRecognitionStatsText());
 
+        fragmentsStatusPanel.refresh(model.getFragmentStates());
+
         drawCurrCanvas();
 
         Graphics g = qrCodeImageCanvas.getGraphics();
@@ -392,7 +405,16 @@ public class QRCodeDecoderChannelView {
     protected void drawCurrCanvas() {
     	BufferedImage image = model.getCurrentScreenshotImg();
         qrCodeImageCanvas.setImage(image);
-    	
+
         qrCodeImageCanvas.repaint();
+    }
+
+    /** white/pale=initial (never seen), green=received (known, not yet sequential), grey=acknowledged (consumed) */
+    private static Color colorForFragmentState(FragmentState state) {
+    	switch (state) {
+    		case ACKNOWLEDGED: return Color.LIGHT_GRAY;
+    		case RECEIVED: return Color.GREEN;
+    		default: return Color.WHITE;
+    	}
     }
 }

@@ -33,11 +33,11 @@ public class QREncodeSetting {
     private int qrCodeW = 17 + 4*qrVersion; // cf com.google.zxing.qrcode.decoder.Version.getDimensionForVersion()
     private int qrCodeH = qrCodeW;
 
-    // FEC-like redundancy: additionally emit "combo" packets that XOR together consecutive plain fragments,
-    // so the decoder can recover one missing fragment per combo without needing a re-transmission.
+    // FEC-like redundancy: when enabled, QRCodesEncoderChannel.nextFragmentToSend cycles through this sequence
+    // of group sizes, XORing that many still-pending fragments together instead of always sending one plain
+    // fragment -- so the decoder can recover a fragment from a combo once all-but-one of its members are known.
     private boolean comboRedundancyEnabled = false;
-    private int[] comboCodes = new int[] { 2 };
-    private int comboEmitEveryNFragments = 4;
+    private int[] comboGroupSizes = new int[] { 1, 2, 3 };
 
 
     public QREncodeSetting() {
@@ -82,20 +82,12 @@ public class QREncodeSetting {
 		this.comboRedundancyEnabled = p;
 	}
 
-	public int[] getComboCodes() {
-		return comboCodes;
+	public int[] getComboGroupSizes() {
+		return comboGroupSizes;
 	}
 
-	public void setComboCodes(int[] p) {
-		this.comboCodes = p;
-	}
-
-	public int getComboEmitEveryNFragments() {
-		return comboEmitEveryNFragments;
-	}
-
-	public void setComboEmitEveryNFragments(int p) {
-		this.comboEmitEveryNFragments = p;
+	public void setComboGroupSizes(int[] p) {
+		this.comboGroupSizes = p;
 	}
 
 }

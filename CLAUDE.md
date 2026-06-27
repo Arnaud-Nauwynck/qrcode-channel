@@ -39,23 +39,29 @@ truth for how this project is intended to be run.
 
 **Encode side** (`impl/encode`): `QRCodesEncoderChannel` takes a text string, splits it into fragments sized to fit
 the configured QR code capacity (`QREncodeSetting` — QR version, error-correction level, pixel dimensions), prefixes
-each fragment with a `"<seqNumber> <crc32>\n"` header, and renders each as a `BufferedImage` via ZXing
+each fragment with a `"<id> <code> <len> <crc32>\n"` header (`code` is `1` for a plain fragment, `2`-`8` for an
+XOR "combo" redundancy fragment — see below), and renders each as a `BufferedImage` via ZXing
 (`QRCodeWriter`/`MatrixToImageWriter`). `QRCodeEncodedFragment` wraps one fragment's image; `QRCodesEncoderChannel`
-exposes the full set as `FragmentImg`s for the UI to cycle through and display on screen.
+exposes the full set as `FragmentImg`s for the UI to cycle through and display on screen. When `QREncodeSetting`'s
+combo redundancy is enabled, `scheduleComboFragments` additionally emits "combo" fragments that XOR together `code`
+consecutive plain fragments (`ByteArrayXorUtils`), letting the decoder recover one missing plain fragment per combo
+without retransmission.
 
 **Decode side** (`impl/decode`): `QRCodesDecoderChannel` owns an `ImageStreamProvider` (pulls frames from an
 `ImageProvider`) and an `ImageStreamCallback` (currently `ZXingQRStreamFromImageStreamCallback`; a ZBar-based
 alternative existed and is referenced in a comment as a swappable implementation). Each captured frame yields a
 `QRCapturedEvent` with zero or more `QRResult`s. `QRCodesDecoderChannel.handleFragmentHeaderAndData` parses the
-`seqNumber crc32\n` header, verifies the CRC32 (`QRCodecChannelUtils.crc32`), and reassembles fragments **in
-sequence order**: fragments arriving out of order are buffered in `aheadFragments` until the gap is filled, fragments
-behind the current sequence are dropped as duplicates. Reassembled text accumulates in `readyText`. Decode events
-(`DecoderChannelEvent`) are pushed to a `DecoderChannelListener` for the UI; `QRDecodeRollingStats` tracks
-recognized/duplicate/protocol-error/checksum-error counts in rolling time buckets for the stats display.
+`id code len crc32\n` header, verifies the data length and CRC32 (`QRCodecChannelUtils.crc32`), and for plain
+fragments (`code == 1`) reassembles them **in sequence order**: fragments behind the current sequence are dropped as
+duplicates, while combo fragments (`code >= 2`) are buffered in `ComboPacketCache` and XOR-decoded against already-
+known fragments to recover a missing one once enough of the combo's range is available. Reassembled bytes accumulate
+in `readyBytes`. Decode events (`DecoderChannelEvent`) are pushed to a `DecoderChannelListener` for the UI;
+`QRDecodeRollingStats` tracks recognized/duplicate/protocol-error/checksum-error counts in rolling time buckets for
+the stats display.
 
-Both channels are protocol-symmetric around the same `"seqNumber crc32\n<data>"` framing — when changing the header
-format, both `QRCodesEncoderChannel.appendFragmentsFor` and `QRCodesDecoderChannel.handleFragmentHeaderAndData` (plus
-its `fragmentHeaderPattern` regex) must be updated together.
+Both channels are protocol-symmetric around the same `"<id> <code> <len> <crc32>\n<data>"` framing — when changing
+the header format, both `QRCodesEncoderChannel.buildAndStorePlainFragment`/`buildAndStoreComboFragment` and
+`QRCodesDecoderChannel.handleFragmentHeaderAndData` (plus its `fragmentHeaderPattern` regex) must be updated together.
 
 ### Image sources (`impl/decode/input`)
 

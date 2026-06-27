@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn -q -o compile)",
+      "Bash(mvn -q -o -Dtest=QRCodesEncoderChannelTest test)",
+      "Bash(mvn -q -o test)",
+      "Bash(mvn -q -o test-compile)",
+      "Bash(xargs grep -l \"getComboFragments\\\\|getComboCodes\\\\|setComboCodes\\\\|getComboEmitEveryNFragments\\\\|setComboEmitEveryNFragments\\\\|getNextFragmentImgs\\\\|ComboPacket\\(\")",
+      "Bash(rm -rf target/test-classes target/classes)",
+      "Bash(mvn -o test-compile)",
+      "Bash(mvn -o test)",
+      "Bash(mvn -o test -DskipTests=false)",
+      "Bash(mvn -o test -DskipTests=false -Dtest=EncodeDecodeWithComboRecoveryE2ETest)",
+      "Read(//tmp/**)",
+      "Bash(kill -9 2842 2742 2883)",
+      "Bash(timeout 60 mvn -o test -DskipTests=false -Dtest=EncodeDecodeWithComboRecoveryE2ETest)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(find ~/.m2 -name '*.jar')",
+      "Bash(python3 -c ' *)",
+      "Bash(mvn -o dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt -q)"
+    ]
+  }
+}

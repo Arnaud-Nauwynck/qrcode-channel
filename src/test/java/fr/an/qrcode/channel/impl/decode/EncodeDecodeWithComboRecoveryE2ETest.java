@@ -1,10 +1,10 @@
 package fr.an.qrcode.channel.impl.decode;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.awt.image.BufferedImage;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
@@ -22,7 +22,7 @@ import com.google.zxing.qrcode.QRCodeReader;
 
 import fr.an.qrcode.channel.impl.QREncodeSetting;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
-import fr.an.qrcode.channel.impl.encode.FragmentImg;
+import fr.an.qrcode.channel.impl.encode.QRCodeEncodedFragment;
 import fr.an.qrcode.channel.impl.encode.QRCodesEncoderChannel;
 import fr.an.qrcode.channel.impl.util.DimInt2D;
 
@@ -38,13 +38,10 @@ public class EncodeDecodeWithComboRecoveryE2ETest {
 
 		QREncodeSetting encodeSettings = new QREncodeSetting();
 		encodeSettings.setComboRedundancyEnabled(true);
-		encodeSettings.setComboCodes(new int[] { 2 });
-		encodeSettings.setComboEmitEveryNFragments(1); // redundancy for every anchor, to guarantee coverage of the dropped one
+		encodeSettings.setComboGroupSizes(new int[] { 1, 2 }); // alternate plain sends (to bootstrap the decoder) with 2-way combos
 
 		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(encodeSettings);
 		encoder.appendFragmentsFor(originalText);
-
-		List<FragmentImg> allFragmentImgs = encoder.getNextFragmentImgs();
 
 		int totalPlainCount = encoder.getFragmentImgs().size();
 		int droppedFragmentNumber = totalPlainCount / 2;
@@ -55,18 +52,36 @@ public class EncodeDecodeWithComboRecoveryE2ETest {
 
 		QRCodesDecoderChannel decoder = new QRCodesDecoderChannel(decodeHints, new NoopImageProvider(), e -> {});
 
-		for (FragmentImg fragImg : allFragmentImgs) {
-			boolean isPlainDroppedFragment = fragImg.owner.getCode() == 1 && fragImg.getFragmentNumber() == droppedFragmentNumber;
+		// every pending plain fragment id needs to be covered by at least one combo it's part of; cycling
+		// through several full round-robin passes is enough for every id to be sent plain or anchor a combo
+		int maxSends = totalPlainCount * 4;
+		for (int i = 0; i < maxSends && !encoder.isFullyAcknowledged(); i++) {
+			QRCodeEncodedFragment frag = encoder.nextFragmentToSend();
+			if (frag == null) {
+				break;
+			}
+
+			boolean containsDroppedFragment = false;
+			for (int id : frag.getIds()) {
+				if (id == droppedFragmentNumber) {
+					containsDroppedFragment = true;
+				}
+			}
+			boolean isPlainDroppedFragment = frag.isPlain() && containsDroppedFragment;
 			if (isPlainDroppedFragment) {
 				continue; // simulate this one QR code never being captured by the camera
 			}
 
-			String headerAndData = decodeImageToText(reader, fragImg.img, decodeHints);
+			String headerAndData = decodeImageToText(reader, frag.getImg(), decodeHints);
 			decoder.handleFragmentHeaderAndData(headerAndData);
+
+			// the human-in-the-loop ack channel reports back fragments the decoder has fully reassembled
+			encoder.acknowledgeUpTo(decoder.getNextSequenceNumber());
 		}
 
 		assertEquals(originalText, decoder.getReadyText());
 		assertEquals(totalPlainCount + 1, decoder.getNextSequenceNumber());
+		assertTrue(encoder.isFullyAcknowledged());
 	}
 
 	private String decodeImageToText(QRCodeReader reader, BufferedImage img, Map<DecodeHintType, Object> hints)

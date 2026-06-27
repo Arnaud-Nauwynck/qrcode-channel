@@ -1,6 +1,7 @@
 package fr.an.qrcode.channel.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.event.KeyAdapter;
@@ -10,6 +11,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.JButton;
@@ -30,6 +32,7 @@ import fr.an.qrcode.channel.impl.encode.FragmentImg;
 import fr.an.qrcode.channel.impl.encode.QRCodeEncodedFragment;
 import fr.an.qrcode.channel.ui.QRCodeEncoderChannelModel.DisplayMode;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
+import fr.an.qrcode.channel.ui.utils.SquaresStripPanel;
 
 /**
  * a "Text to QRCode(s)" player view (with main application)
@@ -79,6 +82,8 @@ public class QRCodeEncoderChannelView {
     private JLabel[] qrDetailAllChannelsHeaderLabels;
     private JLabel[] qrDetailAllChannelsDataLabels;
     // private JTextField qrDetailDuplexMetadataText;
+
+    private SquaresStripPanel<FragmentImg> fragmentsStatusPanel;
 
     private Calib3dChartPanel calib3dChartPanel;
 
@@ -239,10 +244,10 @@ public class QRCodeEncoderChannelView {
 
 
             qrCodeImageCanvas = new ImageCanvas();
-            int zoom = 2;
-            QREncodeSetting qrSettings = model.getEncodeSetting();
-            // qrCodeImageCanvas.setPreferredSize(new Dimension(zoom*qrSettings.getQrCodeW(), zoom*qrSettings.getQrCodeH()));
-            playerTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
+            qrCodeImageCanvas.setPreferredSize(new Dimension(250, 250));
+            JPanel qrCodeImageHolderPanel = new JPanel();
+            qrCodeImageHolderPanel.add(qrCodeImageCanvas);
+            playerTabPanel.add(qrCodeImageHolderPanel, BorderLayout.CENTER);
 
 
             qrDetailPanel = new JPanel(new BorderLayout());
@@ -277,7 +282,16 @@ public class QRCodeEncoderChannelView {
 
             qrDetailPanel.add(qrDetailSingleLineToolbar, BorderLayout.CENTER);
 
-            playerTabPanel.add(qrDetailPanel, BorderLayout.SOUTH);
+            fragmentsStatusPanel = new SquaresStripPanel<>(5, 1, QRCodeEncoderChannelView::colorForEncodedFragment);
+            JScrollPane fragmentsStatusScrollPane = new JScrollPane(fragmentsStatusPanel);
+            fragmentsStatusScrollPane.setPreferredSize(new Dimension(0, 30));
+            fragmentsStatusScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+            fragmentsStatusScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+
+            JPanel southPanel = new JPanel(new BorderLayout());
+            southPanel.add(qrDetailPanel, BorderLayout.NORTH);
+            southPanel.add(fragmentsStatusScrollPane, BorderLayout.SOUTH);
+            playerTabPanel.add(southPanel, BorderLayout.SOUTH);
         }
 
         calib3dChartPanel = new Calib3dChartPanel();
@@ -355,6 +369,8 @@ public class QRCodeEncoderChannelView {
 
         qrDetailShowAllChannelsCheckBox.setEnabled(group.size() > 1);
         updateDetailTexts(group);
+
+        fragmentsStatusPanel.refresh(model.getFragmentImgsList());
     }
 
     private void updateDetailTexts(List<FragmentImg> group) {
@@ -390,6 +406,17 @@ public class QRCodeEncoderChannelView {
     		qrDetailDataText.setText(frag != null
     				? frag.getData().length + " " + new String(frag.getData(), java.nio.charset.StandardCharsets.ISO_8859_1) : "");
     	}
+    }
+
+    /** grey if acknowledged, else colored from pale to deep orange/red by sent-count intensity */
+    private static Color colorForEncodedFragment(FragmentImg frag) {
+    	if (frag.isAcknowledge()) {
+    		return Color.LIGHT_GRAY;
+    	}
+    	int sentCount = frag.getSentPlainCount() + frag.getSentXor2Count() + frag.getSentXor3Count();
+    	float intensity = 1f - 1f / (1f + sentCount);
+    	int green = Math.round(255 * (1f - intensity));
+    	return new Color(255, green, 0);
     }
 
 }

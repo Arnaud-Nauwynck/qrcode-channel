@@ -3,7 +3,6 @@ package fr.an.qrcode.channel.ui;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -143,25 +142,12 @@ public class QRCodeEncoderChannelModel {
     }
 
     protected void runPlayThread() {
-    	int groupSize = groupSize();
-
-    	// first few groups.. to autocalibrate webcam brightness..
-    	int firstPreviewGroups = 15;
-    	int groupCount = 0;
-    	for (int fragNum = 1; fragNum <= fragmentImgs.size(); fragNum += groupSize) {
-    		if (isGroupFullyAcknowledged(fragNum, groupSize)) {
-    			continue;
+    	// first few sends.. to autocalibrate webcam brightness..
+    	int firstPreviewSends = 15;
+    	for (int i = 0; i < firstPreviewSends; i++) {
+    		if (!displayNextFragmentToSend()) {
+    			break; // already fully acknowledged
     		}
-			groupCount++;
-			if (groupCount > firstPreviewGroups) {
-				break;
-			}
-
-    		final int n = fragNum;
-    		try {
-	    		SwingUtilities.invokeAndWait(() -> setCurrentDisplayGroupAt(n));
-			} catch (Exception e) {
-			}
 			try {
 				Thread.sleep(millisBetweenImg);
 			} catch (InterruptedException e) {
@@ -172,30 +158,7 @@ public class QRCodeEncoderChannelModel {
 			}
 		}
 
-    	for (int fragNum = 1; fragNum <= fragmentImgs.size(); fragNum += groupSize) {
-    		if (isGroupFullyAcknowledged(fragNum, groupSize)) {
-    			continue;
-    		}
-    		final int n = fragNum;
-			try {
-				SwingUtilities.invokeAndWait(() -> setCurrentDisplayGroupAt(n));
-			} catch (Exception e) {
-			}
-			try {
-				Thread.sleep(millisBetweenImg);
-			} catch (InterruptedException e) {
-			}
-			if (displayLoopStopRequested.get()) {
-				break;
-			}
-		}
-
-    	// finally, cycle through redundancy combo fragments (always shown individually, in black/white)
-    	for (QRCodeEncodedFragment combo : encoderChannel.getComboFragments()) {
-			try {
-				SwingUtilities.invokeAndWait(() -> setCurrentDisplayGroup(Collections.singletonList(combo.getFragmentImg())));
-			} catch (Exception e) {
-			}
+    	while (displayNextFragmentToSend()) {
 			try {
 				Thread.sleep(millisBetweenImg);
 			} catch (InterruptedException e) {
@@ -208,14 +171,27 @@ public class QRCodeEncoderChannelModel {
     	displayLoopRunning.set(false);
     }
 
-    private boolean isGroupFullyAcknowledged(int fragNum, int groupSize) {
-    	for (int i = fragNum; i < fragNum + groupSize && i <= fragmentImgs.size(); i++) {
-    		FragmentImg frag = fragmentImgs.get(i);
-    		if (frag != null && !frag.isAcknowledge()) {
-    			return false;
-    		}
+    /** pulls the next fragment(s) to send from the encoder channel (1 in BLACK_WHITE mode, up to 3 in RGB_SPLIT mode) and displays them; returns false once fully acknowledged */
+    private boolean displayNextFragmentToSend() {
+    	if (encoderChannel.isFullyAcknowledged()) {
+    		return false;
     	}
-    	return true;
+    	List<FragmentImg> group = new ArrayList<>();
+    	for (int i = 0; i < groupSize(); i++) {
+    		QRCodeEncodedFragment frag = encoderChannel.nextFragmentToSend();
+    		if (frag == null) {
+    			break;
+    		}
+    		group.add(frag.getFragmentImg());
+    	}
+    	if (group.isEmpty()) {
+    		return false;
+    	}
+		try {
+			SwingUtilities.invokeAndWait(() -> setCurrentDisplayGroup(group));
+		} catch (Exception e) {
+		}
+		return true;
     }
 
     public void onDisplayNextFrag() {
@@ -225,20 +201,10 @@ public class QRCodeEncoderChannelModel {
     	}
     	int groupSize = groupSize();
     	int n = currDisplayIndex + groupSize;
-    	while (n <= fragmentImgs.size()) {
-    		if (!isGroupFullyAcknowledged(n, groupSize)) {
-    			setCurrentDisplayGroupAt(n);
-    			return;
-    		}
-    		n += groupSize;
+    	if (n <= fragmentImgs.size()) {
+    		setCurrentDisplayGroupAt(n);
     	}
     }
-
-	public void rewindToAck() {
-		// TODO
-	}
-
-
 
 	public void onDisplayFrag(int n) {
 		setCurrentDisplayGroupAt(n);
@@ -250,12 +216,8 @@ public class QRCodeEncoderChannelModel {
     	}
     	int groupSize = groupSize();
     	int n = currDisplayIndex - groupSize;
-    	while (n >= 1) {
-    		if (!isGroupFullyAcknowledged(n, groupSize)) {
-    			setCurrentDisplayGroupAt(n);
-    			return;
-    		}
-    		n -= groupSize;
+    	if (n >= 1) {
+    		setCurrentDisplayGroupAt(n);
     	}
     }
 
@@ -283,35 +245,26 @@ public class QRCodeEncoderChannelModel {
 		}
 		pcs.firePropertyChange("fragmentImgs", null, fragmentImgs);
 	}
-	
+
 	public int getAckSeqNumber() {
 		return ackSeqNumber;
 	}
-	
+
 	public void setAckSeqNumber(int num) {
 		ackSeqNumber = num;
-
-    	for(FragmentImg frag : fragmentImgs.values()) {
-    		if (frag.getFragmentNumber() < num) {
-    			frag.acknowledge();
-    		}
-    	}
+		encoderChannel.acknowledgeUpTo(num);
 		pcs.firePropertyChange("fragmentImgs", null, fragmentImgs);
 	}
 
 	public void incrAckSeqNumber(int count) {
 		setAckSeqNumber(ackSeqNumber + count);
 	}
-	
+
     private void addAcknowledgeFrag(int fragNum) {
     	if (ackSeqNumber+1 == fragNum) {
     		ackSeqNumber++;
     	}
-    	
-    	FragmentImg frag = fragmentImgs.get(fragNum);
-    	if (frag != null) {
-			frag.acknowledge();
-    	}
+    	encoderChannel.acknowledge(fragNum);
 	}
 
 
@@ -380,6 +333,11 @@ public class QRCodeEncoderChannelModel {
 
 	public BufferedImage getCurrentFragmentImg() {
 		return currentDisplayImg;
+	}
+
+	/** every fragment, in id order, for the fragments status table */
+	public List<FragmentImg> getFragmentImgsList() {
+		return fragmentImgs != null ? new ArrayList<>(fragmentImgs.values()) : new ArrayList<>();
 	}
 
 	public String getAcknowledgeInfo() {

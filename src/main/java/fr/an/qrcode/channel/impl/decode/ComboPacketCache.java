@@ -1,9 +1,8 @@
 package fr.an.qrcode.channel.impl.decode;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.function.IntFunction;
 
 import fr.an.qrcode.channel.impl.util.ByteArrayXorUtils;
@@ -12,24 +11,21 @@ import fr.an.qrcode.channel.impl.util.ByteArrayXorUtils;
  * buffers combo (XOR) packets that aren't immediately resolvable, and attempts to recover a missing
  * plain fragment's bytes whenever new information arrives (a new plain fragment, or a new combo).
  *
- * a combo covering [id-code+1 .. id] can recover at most ONE missing fragment via XOR; if 2+ fragments
- * in its range are unknown it stays buffered until more information arrives, and is never resolvable
- * by this single combo alone (gracefully ignored, never throws).
+ * a combo covering a set of ids can recover at most ONE missing fragment via XOR; if 2+ ids in its set
+ * are unknown it stays buffered until more information arrives, and is never resolvable by this single
+ * combo alone (gracefully ignored, never throws).
  */
 public class ComboPacketCache {
 
-	/** keyed by anchor id; several combos (different code) can share the same anchor id */
-	private Map<Integer, List<ComboPacket>> combosByAnchorId = new LinkedHashMap<>();
+	private List<ComboPacket> combos = new ArrayList<>();
+	private LinkedHashSet<String> seenKeys = new LinkedHashSet<>();
 
-	/** returns false if this exact (id,code) combo was already buffered (duplicate) */
+	/** returns false if this exact id set was already buffered (duplicate) */
 	public boolean insertCombo(ComboPacket combo, IntFunction<byte[]> knownFragmentLookup, FragmentRecoveredCallback onRecovered) {
-		List<ComboPacket> existing = combosByAnchorId.computeIfAbsent(combo.id, k -> new ArrayList<>());
-		for (ComboPacket c : existing) {
-			if (c.code == combo.code) {
-				return false; // duplicate
-			}
+		if (!seenKeys.add(combo.key())) {
+			return false; // duplicate
 		}
-		existing.add(combo);
+		combos.add(combo);
 		tryRecoverFromCombo(combo, knownFragmentLookup, onRecovered);
 		return true;
 	}
@@ -39,16 +35,23 @@ public class ComboPacketCache {
 		boolean recoveredAny = true;
 		while (recoveredAny) {
 			recoveredAny = false;
-			for (List<ComboPacket> combos : combosByAnchorId.values()) {
-				for (ComboPacket combo : new ArrayList<>(combos)) {
-					if (fragId >= combo.rangeFrom() && fragId <= combo.rangeTo()) {
-						if (tryRecoverFromCombo(combo, knownFragmentLookup, onRecovered)) {
-							recoveredAny = true;
-						}
+			for (ComboPacket combo : new ArrayList<>(combos)) {
+				if (containsId(combo, fragId)) {
+					if (tryRecoverFromCombo(combo, knownFragmentLookup, onRecovered)) {
+						recoveredAny = true;
 					}
 				}
 			}
 		}
+	}
+
+	private static boolean containsId(ComboPacket combo, int fragId) {
+		for (int id : combo.ids) {
+			if (id == fragId) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** attempts XOR-recovery of a combo's single missing fragment; returns true if a fragment was recovered */
@@ -56,7 +59,7 @@ public class ComboPacketCache {
 		int missingId = -1;
 		int missingCount = 0;
 		List<byte[]> knownBytes = new ArrayList<>();
-		for (int fragId = combo.rangeFrom(); fragId <= combo.rangeTo(); fragId++) {
+		for (int fragId : combo.ids) {
 			byte[] bytes = knownFragmentLookup.apply(fragId);
 			if (bytes == null) {
 				missingCount++;
@@ -78,17 +81,22 @@ public class ComboPacketCache {
 		return true;
 	}
 
-	/** evicts combos whose whole range is already fully consumed into the decoder's ready output (id < nextSequenceNumber) */
+	/** evicts combos whose every id is already fully consumed into the decoder's ready output (id < nextSequenceNumber) */
 	public void cleanupConsumed(int nextSequenceNumber) {
-		combosByAnchorId.entrySet().removeIf(e -> e.getKey() < nextSequenceNumber);
+		combos.removeIf(combo -> allIdsBelow(combo, nextSequenceNumber));
+	}
+
+	private static boolean allIdsBelow(ComboPacket combo, int nextSequenceNumber) {
+		for (int id : combo.ids) {
+			if (id >= nextSequenceNumber) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	public int size() {
-		int count = 0;
-		for (List<ComboPacket> combos : combosByAnchorId.values()) {
-			count += combos.size();
-		}
-		return count;
+		return combos.size();
 	}
 
 	public interface FragmentRecoveredCallback {

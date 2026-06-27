@@ -3,6 +3,7 @@ package fr.an.qrcode.channel.impl.encode;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -18,7 +19,6 @@ import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.Version;
 
 import fr.an.qrcode.channel.impl.QRCodeUtils;
-import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
 import fr.an.qrcode.channel.impl.QREncodeSetting;
 import fr.an.qrcode.channel.impl.util.ByteArrayXorUtils;
 
@@ -26,8 +26,8 @@ public class QRCodesEncoderChannel {
 
 	private static final Logger LOG = LoggerFactory.getLogger(QRCodesEncoderChannel.class);
 
-	// header shape: "<id> <code> <len> <crc32>\n" -- worst case ~ "9999999 8 99999 4294967295\n"
-	private static int ESTIM_HEADER_LEN = 30;
+	// header shape: "<id1> [<id2>] [<id3>] <code> <len> <crc32>\n" -- worst case ~ "9999999 9999998 9999997 3 99999 4294967295\n"
+	private static int ESTIM_HEADER_LEN = 45;
 
 	private QREncodeSetting qrEncodeSettings;
 
@@ -36,21 +36,25 @@ public class QRCodesEncoderChannel {
 
 	private Map<Integer,QRCodeEncodedFragment> fragments = new LinkedHashMap<>();
 
-	/** redundancy "combo" fragments (code 2..8), keyed separately since their id (anchor) collides with a plain fragment's id */
-	private List<QRCodeEncodedFragment> comboFragments = new ArrayList<>();
-	
+	/** ids of plain fragments not yet acknowledged by the decoder; drives what nextFragmentToSend() emits */
+	private LinkedHashSet<Integer> pendingIds = new LinkedHashSet<>();
+
+	/** round-robin cursor over pendingIds, cycling group sizes from QREncodeSetting.comboGroupSizes */
+	private int sendCursor = 0;
+	private int comboGroupSizeIndex = 0;
+
 	// ------------------------------------------------------------------------
 
 	public QRCodesEncoderChannel(QREncodeSetting encodeSetting) {
 		this.qrEncodeSettings = encodeSetting;
 	}
-	
+
 	// ------------------------------------------------------------------------
-	
+
 	public int getNextSequenceNumber() {
 		return nextSeqNumber;
 	}
-	
+
 	public void appendFragmentsFor(String textContent) {
 		Version qrVersion = Version.getVersionForNumber(qrEncodeSettings.getQrVersion());
 		int bytesCapacity = QRCodeUtils.qrCodeBytesCapacity(qrVersion, qrEncodeSettings.getErrorCorrectionLevel());
@@ -77,52 +81,96 @@ public class QRCodesEncoderChannel {
 		for (byte[] chunk : splitChunks) {
 			int fragSeqNumber = nextSeqNumber++;
 			buildAndStorePlainFragment(fragSeqNumber, chunk);
+			pendingIds.add(fragSeqNumber);
 		}
 		LOG.info("splitting " + fragments.size() + " frags");
-
-		scheduleComboFragments();
 	}
 
 	private void buildAndStorePlainFragment(int fragSeqNumber, byte[] data) {
-		long crc32 = QRCodecChannelUtils.crc32(data);
-		String header = fragSeqNumber + " " + 1 + " " + data.length + " " + crc32 + "\n";
-		QRCodeEncodedFragment frag = new QRCodeEncodedFragment(this, fragSeqNumber, 1, header, data);
+		QRCodeEncodedFragment frag = new QRCodeEncodedFragment(this, new int[] { fragSeqNumber }, data);
 		fragments.put(fragSeqNumber, frag);
 	}
 
-	private void scheduleComboFragments() {
-		if (!qrEncodeSettings.isComboRedundancyEnabled()) {
-			return;
+	/**
+	 * computes the next fragment to transmit: a round-robin walk over still-pending (non-acknowledged) fragment
+	 * ids, cycling through QREncodeSetting.comboGroupSizes -- e.g. sizes {1,2,3} alternates between sending one
+	 * pending fragment plain, XOR-ing it with the next pending one, then with the next two pending ones, so the
+	 * decoder can recover a fragment from a combo once all-but-one of its members become known by any means.
+	 * returns null once every fragment has been acknowledged.
+	 */
+	public QRCodeEncodedFragment nextFragmentToSend() {
+		if (pendingIds.isEmpty()) {
+			return null;
 		}
-		int totalPlainCount = fragments.size();
-		if (totalPlainCount == 0) {
-			return;
+		List<Integer> pendingList = new ArrayList<>(pendingIds);
+		int n = pendingList.size();
+		if (sendCursor >= n) {
+			sendCursor = 0;
 		}
-		int everyN = Math.max(1, qrEncodeSettings.getComboEmitEveryNFragments());
-		for (int code : qrEncodeSettings.getComboCodes()) {
-			if (code < 2 || code > 8) {
-				continue;
-			}
-			for (int id = code; id <= totalPlainCount; id++) {
-				boolean isLastFragment = (id == totalPlainCount);
-				if (id % everyN != 0 && !isLastFragment) {
-					continue; // skip -- not a scheduled anchor (always force-emit at the very last fragment)
+
+		int groupSize = 1;
+		if (qrEncodeSettings.isComboRedundancyEnabled()) {
+			int[] groupSizes = qrEncodeSettings.getComboGroupSizes();
+			if (groupSizes.length > 0) {
+				if (comboGroupSizeIndex >= groupSizes.length) {
+					comboGroupSizeIndex = 0;
 				}
-				buildAndStoreComboFragment(id, code);
+				groupSize = Math.max(1, groupSizes[comboGroupSizeIndex]);
+				comboGroupSizeIndex++;
+			}
+		}
+		groupSize = Math.min(groupSize, n);
+
+		int[] ids = new int[groupSize];
+		for (int i = 0; i < groupSize; i++) {
+			ids[i] = pendingList.get((sendCursor + i) % n);
+		}
+		java.util.Arrays.sort(ids);
+		sendCursor = (sendCursor + 1) % n;
+
+		for (int id : ids) {
+			QRCodeEncodedFragment plainFrag = fragments.get(id);
+			if (plainFrag != null) {
+				plainFrag.incrSentCount(ids.length);
+			}
+		}
+
+		return buildFragmentFor(ids);
+	}
+
+	private QRCodeEncodedFragment buildFragmentFor(int[] ids) {
+		if (ids.length == 1) {
+			return fragments.get(ids[0]);
+		}
+		List<byte[]> sourceBytes = new ArrayList<>();
+		for (int id : ids) {
+			sourceBytes.add(fragments.get(id).getData());
+		}
+		int len = ByteArrayXorUtils.maxLength(sourceBytes);
+		byte[] data = ByteArrayXorUtils.xorWithPadding(sourceBytes, len);
+		return new QRCodeEncodedFragment(this, ids, data);
+	}
+
+	/** marks a plain fragment id as acknowledged by the decoder; it is no longer scheduled by nextFragmentToSend() */
+	public void acknowledge(int fragSeqNumber) {
+		pendingIds.remove(fragSeqNumber);
+		QRCodeEncodedFragment frag = fragments.get(fragSeqNumber);
+		if (frag != null) {
+			frag.acknowledge();
+		}
+	}
+
+	/** marks every fragment id strictly below seqNumber as acknowledged */
+	public void acknowledgeUpTo(int seqNumber) {
+		for (int id : new ArrayList<>(pendingIds)) {
+			if (id < seqNumber) {
+				acknowledge(id);
 			}
 		}
 	}
 
-	private void buildAndStoreComboFragment(int id, int code) {
-		List<byte[]> sourceBytes = new ArrayList<>();
-		for (int fragId = id - code + 1; fragId <= id; fragId++) {
-			sourceBytes.add(fragments.get(fragId).getData());
-		}
-		int len = ByteArrayXorUtils.maxLength(sourceBytes);
-		byte[] data = ByteArrayXorUtils.xorWithPadding(sourceBytes, len);
-		long crc32 = QRCodecChannelUtils.crc32(data);
-		String header = id + " " + code + " " + len + " " + crc32 + "\n";
-		comboFragments.add(new QRCodeEncodedFragment(this, id, code, header, data));
+	public boolean isFullyAcknowledged() {
+		return pendingIds.isEmpty();
 	}
 
 	public BufferedImage encodeAndRender(String text) {
@@ -201,18 +249,6 @@ public class QRCodesEncoderChannel {
 		return res;
 	}
 
-	public List<FragmentImg> getNextFragmentImgs() {
-		List<FragmentImg> res = new ArrayList<>(getFragmentImgs().values());
-		for (QRCodeEncodedFragment combo : comboFragments) {
-			res.add(combo.getFragmentImg());
-		}
-		return res;
-	}
-
-	public List<QRCodeEncodedFragment> getComboFragments() {
-		return comboFragments;
-	}
-	
 	public BufferedImage getFragmentImg(int num) {
 		QRCodeEncodedFragment frag = fragments.get(num);
 		if (frag == null) {
@@ -220,5 +256,5 @@ public class QRCodesEncoderChannel {
 		}
 		return frag.getImg();
 	}
-	
+
 }

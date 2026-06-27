@@ -3,6 +3,8 @@ package fr.an.qrcode.channel.impl.encode;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.awt.image.BufferedImage;
@@ -83,7 +85,7 @@ public class QRCodesEncoderChannelTest {
 		return bordered;
 	}
 
-	private static final Pattern HEADER_PATTERN = Pattern.compile("([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)");
+	private static final Pattern HEADER_PATTERN = Pattern.compile("([0-9 ]+) ([0-9]+) ([0-9]+) ([0-9]+)");
 
 	@Test
 	public void testHeaderFormat_plainFragment() {
@@ -94,70 +96,95 @@ public class QRCodesEncoderChannelTest {
 		FragmentImg frag1 = imgs.get(1);
 		Matcher m = HEADER_PATTERN.matcher(frag1.owner.getHeader().trim());
 		assertTrue(m.matches());
-		assertEquals(1, Integer.parseInt(m.group(1)));
+		assertEquals("1", m.group(1));
 		assertEquals(1, Integer.parseInt(m.group(2)));
 		assertEquals(frag1.owner.getData().length, Integer.parseInt(m.group(3)));
 		assertEquals(QRCodecChannelUtils.crc32(frag1.owner.getData()), Long.parseLong(m.group(4)));
 	}
 
 	@Test
-	public void testComboScheduling_disabledByDefault() {
+	public void testNextFragmentToSend_plainOnlyWhenRedundancyDisabled() {
 		QREncodeSetting settings = new QREncodeSetting();
 		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
-		encoder.appendFragmentsFor(randomASCII(2000));
-
-		assertTrue(encoder.getComboFragments().isEmpty());
-	}
-
-	@Test
-	public void testComboScheduling_enabled_basicCode2() {
-		QREncodeSetting settings = new QREncodeSetting();
-		settings.setComboRedundancyEnabled(true);
-		settings.setComboCodes(new int[] { 2 });
-		settings.setComboEmitEveryNFragments(2);
-		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
-		encoder.appendFragmentsFor(randomASCII(2000));
-
-		assertFalse(encoder.getComboFragments().isEmpty());
-		Map<Integer, FragmentImg> plainImgs = encoder.getFragmentImgs();
-		for (QRCodeEncodedFragment combo : encoder.getComboFragments()) {
-			assertEquals(2, combo.getCode());
-			byte[] dataA = plainImgs.get(combo.getFragmentNumber() - 1).owner.getData();
-			byte[] dataB = plainImgs.get(combo.getFragmentNumber()).owner.getData();
-			int expectedLen = ByteArrayXorUtils.maxLength(java.util.Arrays.asList(dataA, dataB));
-			byte[] expectedXor = ByteArrayXorUtils.xorWithPadding(dataA, dataB, expectedLen);
-			assertArrayEquals(expectedXor, combo.getData());
-		}
-	}
-
-	@Test
-	public void testComboScheduling_skipsWhenNotEnoughHistory() {
-		QREncodeSetting settings = new QREncodeSetting();
-		settings.setComboRedundancyEnabled(true);
-		settings.setComboCodes(new int[] { 3 });
-		settings.setComboEmitEveryNFragments(1);
-		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
-		encoder.appendFragmentsFor(randomASCII(2000));
-
-		for (QRCodeEncodedFragment combo : encoder.getComboFragments()) {
-			assertTrue("code=3 combo must never anchor below id 3", combo.getFragmentNumber() >= 3);
-		}
-	}
-
-	@Test
-	public void testComboScheduling_skipsBeyondMessageEnd() {
-		QREncodeSetting settings = new QREncodeSetting();
-		settings.setComboRedundancyEnabled(true);
-		settings.setComboCodes(new int[] { 2, 3, 4, 5, 6, 7, 8 });
-		settings.setComboEmitEveryNFragments(1);
-		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
-		encoder.appendFragmentsFor(randomASCII(50)); // short message -> only 3 plain fragments
+		encoder.appendFragmentsFor(randomASCII(200));
 
 		int totalPlainCount = encoder.getFragmentImgs().size();
-		assertTrue(totalPlainCount < 8);
-		for (QRCodeEncodedFragment combo : encoder.getComboFragments()) {
-			assertTrue("combo must never reference ids beyond the message", combo.getFragmentNumber() <= totalPlainCount);
-			assertTrue("combo must never require fragments below id 1", combo.getFragmentNumber() - combo.getCode() + 1 >= 1);
+		for (int i = 0; i < totalPlainCount; i++) {
+			QRCodeEncodedFragment frag = encoder.nextFragmentToSend();
+			assertTrue("redundancy disabled -> every send must be plain (code=1)", frag.isPlain());
+		}
+	}
+
+	@Test
+	public void testNextFragmentToSend_cyclesComboGroupSizes() {
+		QREncodeSetting settings = new QREncodeSetting();
+		settings.setComboRedundancyEnabled(true);
+		settings.setComboGroupSizes(new int[] { 1, 2, 3 });
+		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
+		encoder.appendFragmentsFor(randomASCII(2000));
+
+		int[] codesSeen = new int[4]; // index 1..3
+		for (int i = 0; i < 30; i++) {
+			QRCodeEncodedFragment frag = encoder.nextFragmentToSend();
+			assertTrue(frag.getCode() >= 1 && frag.getCode() <= 3);
+			codesSeen[frag.getCode()]++;
+
+			int[] ids = frag.getIds();
+			for (int j = 1; j < ids.length; j++) {
+				assertTrue("ids must be ascending and distinct", ids[j] > ids[j - 1]);
+			}
+
+			byte[] dataB = fragmentDataFor(encoder, ids);
+			assertArrayEquals(dataB, frag.getData());
+		}
+		assertTrue("expected to see plain (code=1) sends", codesSeen[1] > 0);
+		assertTrue("expected to see 2-way combos", codesSeen[2] > 0);
+		assertTrue("expected to see 3-way combos", codesSeen[3] > 0);
+	}
+
+	private byte[] fragmentDataFor(QRCodesEncoderChannel encoder, int[] ids) {
+		Map<Integer, FragmentImg> plainImgs = encoder.getFragmentImgs();
+		java.util.List<byte[]> sourceBytes = new java.util.ArrayList<>();
+		for (int id : ids) {
+			sourceBytes.add(plainImgs.get(id).owner.getData());
+		}
+		int expectedLen = ByteArrayXorUtils.maxLength(sourceBytes);
+		return ByteArrayXorUtils.xorWithPadding(sourceBytes, expectedLen);
+	}
+
+	@Test
+	public void testAcknowledge_removesFragmentFromPending() {
+		QREncodeSetting settings = new QREncodeSetting();
+		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
+		encoder.appendFragmentsFor(randomASCII(200));
+
+		int totalPlainCount = encoder.getFragmentImgs().size();
+		assertFalse(encoder.isFullyAcknowledged());
+
+		encoder.acknowledgeUpTo(totalPlainCount + 1);
+
+		assertTrue(encoder.isFullyAcknowledged());
+		assertNull("fully acknowledged -> nothing left to send", encoder.nextFragmentToSend());
+	}
+
+	@Test
+	public void testAcknowledge_skipsAcknowledgedFragments() {
+		QREncodeSetting settings = new QREncodeSetting();
+		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
+		encoder.appendFragmentsFor(randomASCII(2000));
+
+		int totalPlainCount = encoder.getFragmentImgs().size();
+		assertTrue(totalPlainCount > 3);
+
+		encoder.acknowledge(1);
+		encoder.acknowledge(2);
+
+		for (int i = 0; i < totalPlainCount * 2; i++) {
+			QRCodeEncodedFragment frag = encoder.nextFragmentToSend();
+			assertNotNull(frag);
+			for (int id : frag.getIds()) {
+				assertTrue("acknowledged ids must never be resent", id != 1 && id != 2);
+			}
 		}
 	}
 

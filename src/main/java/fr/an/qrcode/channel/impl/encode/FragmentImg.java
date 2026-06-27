@@ -27,6 +27,16 @@ public class FragmentImg {
 		this.img = null;
 	}
 
+	public int getSentPlainCount() {
+		return owner.getSentPlainCount();
+	}
+	public int getSentXor2Count() {
+		return owner.getSentXor2Count();
+	}
+	public int getSentXor3Count() {
+		return owner.getSentXor3Count();
+	}
+
 
 	
 	

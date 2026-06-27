@@ -4,12 +4,12 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,8 +122,6 @@ public class QRCodesDecoderChannel {
 	
 	
 	
-    private static final Pattern fragmentHeaderPattern = Pattern.compile("([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)");
-
     // TODO synchronized ??!!!!!!
     protected synchronized void handleFragmentHeaderAndData(String headerAndData) {
     	// long nanosBefore = System.nanoTime();
@@ -145,33 +143,47 @@ public class QRCodesDecoderChannel {
     	String header = headerAndData.substring(0, lineSep);
     	byte[] dataBytes = Arrays.copyOfRange(allBytes, lineSep+1, allBytes.length);
 
-    	Matcher headerMatcher = fragmentHeaderPattern.matcher(header);
-    	if (! headerMatcher.matches()) {
+    	// header shape: "<id1> [<id2>] [<id3>] <code> <len> <crc32>" -- code is the count of leading ids
+    	String[] tokens = header.trim().split("\\s+");
+    	int[] ids;
+    	int len;
+    	long crc32;
+    	try {
+    		int code = Integer.parseInt(tokens[tokens.length - 3]);
+    		if (code < 1 || tokens.length != code + 3) {
+    			currDecodeMsg = "header not recognised: " + header;
+    			bucketStats.incrCountQRPacketProtocolError();
+    			return;
+    		}
+    		ids = new int[code];
+    		for (int i = 0; i < code; i++) {
+    			ids[i] = Integer.parseInt(tokens[i]);
+    		}
+    		len = Integer.parseInt(tokens[tokens.length - 2]);
+    		crc32 = Long.parseLong(tokens[tokens.length - 1]);
+    	} catch (NumberFormatException ex) {
     		currDecodeMsg = "header not recognised: " + header;
     		bucketStats.incrCountQRPacketProtocolError();
     		return;
     	}
-    	int id = Integer.parseInt(headerMatcher.group(1));
-    	int code = Integer.parseInt(headerMatcher.group(2));
-    	int len = Integer.parseInt(headerMatcher.group(3));
-    	long crc32 = Long.parseLong(headerMatcher.group(4));
 
     	if (dataBytes.length != len) {
-    		currDecodeMsg = "data length mismatch for id:" + id + " expected:" + len + " got:" + dataBytes.length;
+    		currDecodeMsg = "data length mismatch for ids:" + Arrays.toString(ids) + " expected:" + len + " got:" + dataBytes.length;
     		bucketStats.incrCountQRPacketProtocolError();
     		return;
     	}
 
     	long checkCrc32 = QRCodecChannelUtils.crc32(dataBytes);
     	if (checkCrc32 != crc32) {
-    		currDecodeMsg = "corrupted data: crc32 differs for fragId:" + id;
+    		currDecodeMsg = "corrupted data: crc32 differs for fragIds:" + Arrays.toString(ids);
     		bucketStats.incrCountQRPacketChecksumException();
     		return;
     	}
 
-    	// ok, got id + code + data...
+    	// ok, got ids + data...
 
-    	if (code == 1) {
+    	if (ids.length == 1) {
+    		int id = ids[0];
     		if (id < nextSequenceNumber) {
 				// drop already seen/handled fragment .. do nothing!
 				currDecodeMsg = "dropped past fragment (" + id + ")";
@@ -182,19 +194,19 @@ public class QRCodesDecoderChannel {
     		comboCache.onPlainFragmentArrived(id, this::lookupKnownFragmentBytes, this::acceptRecoveredFragment);
     		comboCache.cleanupConsumed(nextSequenceNumber);
     	} else {
-    		int rangeFrom = id - code + 1;
-    		if (id < nextSequenceNumber) {
-    			// whole combo range already consumed -- useless
-    			currDecodeMsg = "dropped past combo (id:" + id + " code:" + code + ")";
+    		boolean allPast = Arrays.stream(ids).allMatch(id -> id < nextSequenceNumber);
+    		if (allPast) {
+    			// every id in this combo already consumed -- useless
+    			currDecodeMsg = "dropped past combo (ids:" + Arrays.toString(ids) + ")";
     			bucketStats.incrCountQRPacketRecognizedDuplicate();
     			return;
     		}
-    		ComboPacket combo = new ComboPacket(id, code, len, dataBytes);
+    		ComboPacket combo = new ComboPacket(ids, len, dataBytes);
     		boolean inserted = comboCache.insertCombo(combo, this::lookupKnownFragmentBytes, this::acceptRecoveredFragment);
     		if (inserted) {
-    			currDecodeMsg = "pushed combo (id:" + id + " code:" + code + " range:" + rangeFrom + "-" + id + ")";
+    			currDecodeMsg = "pushed combo (ids:" + Arrays.toString(ids) + ")";
     		} else {
-    			currDecodeMsg = "dropped already pushed combo (id:" + id + " code:" + code + ")";
+    			currDecodeMsg = "dropped already pushed combo (ids:" + Arrays.toString(ids) + ")";
     			bucketStats.incrCountQRPacketRecognizedDuplicate();
     		}
     		comboCache.cleanupConsumed(nextSequenceNumber);
@@ -345,5 +357,30 @@ public class QRCodesDecoderChannel {
 	public int getComboCacheSize() {
 		return comboCache.size();
 	}
-	
+
+	public enum FragmentState { INITIAL, RECEIVED, ACKNOWLEDGED }
+
+	/**
+	 * per-id display state, for ids 1..max(nextSequenceNumber-1, highest known ahead fragment id):
+	 * ACKNOWLEDGED if already consumed into readyBytes (id < nextSequenceNumber), RECEIVED if known
+	 * but not yet sequentially consumed (buffered as an ahead fragment), else INITIAL (never seen).
+	 */
+	public List<FragmentState> getFragmentStates() {
+		int maxKnown = nextSequenceNumber - 1;
+		for (int aheadId : aheadFragments.keySet()) {
+			maxKnown = Math.max(maxKnown, aheadId);
+		}
+		List<FragmentState> states = new ArrayList<>(maxKnown);
+		for (int id = 1; id <= maxKnown; id++) {
+			if (id < nextSequenceNumber) {
+				states.add(FragmentState.ACKNOWLEDGED);
+			} else if (aheadFragments.containsKey(id)) {
+				states.add(FragmentState.RECEIVED);
+			} else {
+				states.add(FragmentState.INITIAL);
+			}
+		}
+		return states;
+	}
+
 }
