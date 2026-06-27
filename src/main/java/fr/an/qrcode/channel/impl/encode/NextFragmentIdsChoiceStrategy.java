@@ -1,6 +1,8 @@
 package fr.an.qrcode.channel.impl.encode;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 import fr.an.qrcode.channel.impl.QREncodeSetting;
 
@@ -24,9 +26,15 @@ public class NextFragmentIdsChoiceStrategy {
 	private boolean comboFrequencyCountersInited = false;
 
 	/** each combo type (plain/xor2/xor3) walks its own position over pendingIds, advanced only when that type is chosen */
-	private int plainCursor = 0;
-	private int xor2Cursor = 0;
-	private int xor3Cursor = 0;
+	private final Map<ComboCode, Integer> frequencyCursors = initFrequencyCursors();
+
+	private static Map<ComboCode, Integer> initFrequencyCursors() {
+		Map<ComboCode, Integer> cursors = new EnumMap<>(ComboCode.class);
+		for (ComboCode code : ComboCode.values()) {
+			cursors.put(code, 0);
+		}
+		return cursors;
+	}
 
 	// ------------------------------------------------------------------------
 
@@ -42,6 +50,9 @@ public class NextFragmentIdsChoiceStrategy {
 	 */
 	public FragmentSelection chooseNextIds(List<Integer> pendingList) {
 		int n = pendingList.size();
+		if (n == 0) {
+			throw new IllegalArgumentException("pendingList must not be empty");
+		}
 		if (sendCursor >= n) {
 			sendCursor = 0;
 		}
@@ -50,7 +61,7 @@ public class NextFragmentIdsChoiceStrategy {
 		int cursor;
 		if (qrEncodeSettings.isComboFrequencyEnabled()) {
 			code = nextFrequencyCode();
-			cursor = (code == ComboCode.XOR3 ? xor3Cursor : code == ComboCode.XOR2 ? xor2Cursor : plainCursor) % n;
+			cursor = frequencyCursors.get(code) % n;
 		} else if (qrEncodeSettings.isComboRedundancyEnabled()) {
 			int[] groupSizes = qrEncodeSettings.getComboGroupSizes();
 			int groupSize = 1;
@@ -70,13 +81,7 @@ public class NextFragmentIdsChoiceStrategy {
 
 		if (qrEncodeSettings.isComboFrequencyEnabled()) {
 			int groupSize = Math.min(code.groupSize, n);
-			if (code == ComboCode.XOR3) {
-				xor3Cursor = (xor3Cursor + groupSize) % n;
-			} else if (code == ComboCode.XOR2) {
-				xor2Cursor = (xor2Cursor + groupSize) % n;
-			} else {
-				plainCursor = (plainCursor + groupSize) % n;
-			}
+			frequencyCursors.put(code, (frequencyCursors.get(code) + groupSize) % n);
 		} else {
 			sendCursor = (sendCursor + 1) % n;
 		}

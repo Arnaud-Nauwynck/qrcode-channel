@@ -36,6 +36,10 @@ public class QRCodesEncoderChannel {
 
 	private Map<Integer,QRCodeEncodedFragment> fragments = new LinkedHashMap<>();
 
+	/** combo (XOR) fragments built by buildFragmentFor(), cached by id-set so repeatedly re-sending the same
+	 *  combo (e.g. while waiting on acknowledgement) reuses the already-XORed data and rendered QR image */
+	private Map<String,QRCodeEncodedFragment> comboFragments = new LinkedHashMap<>();
+
 	/** ids of plain fragments not yet acknowledged by the decoder; drives what nextFragmentToSend() emits */
 	private LinkedHashSet<Integer> pendingIds = new LinkedHashSet<>();
 
@@ -120,13 +124,25 @@ public class QRCodesEncoderChannel {
 		if (ids.length == 1) {
 			return fragments.get(ids[0]);
 		}
-		List<byte[]> sourceBytes = new ArrayList<>();
+		String key = comboKey(ids);
+		return comboFragments.computeIfAbsent(key, k -> {
+			List<byte[]> sourceBytes = new ArrayList<>();
+			for (int id : ids) {
+				sourceBytes.add(fragments.get(id).getData());
+			}
+			int len = ByteArrayXorUtils.maxLength(sourceBytes);
+			byte[] data = ByteArrayXorUtils.xorWithPadding(sourceBytes, len);
+			return new QRCodeEncodedFragment(this, ids, data);
+		});
+	}
+
+	/** ids are already ascending-sorted by FragmentSelection.toIds(); stable key identifying this exact combo */
+	private static String comboKey(int[] ids) {
+		StringBuilder sb = new StringBuilder();
 		for (int id : ids) {
-			sourceBytes.add(fragments.get(id).getData());
+			sb.append(id).append(',');
 		}
-		int len = ByteArrayXorUtils.maxLength(sourceBytes);
-		byte[] data = ByteArrayXorUtils.xorWithPadding(sourceBytes, len);
-		return new QRCodeEncodedFragment(this, ids, data);
+		return sb.toString();
 	}
 
 	/** marks a plain fragment id as acknowledged by the decoder; it is no longer scheduled by nextFragmentToSend() */
@@ -136,6 +152,17 @@ public class QRCodesEncoderChannel {
 		if (frag != null) {
 			frag.acknowledge();
 		}
+		// any cached combo referencing this id is now stale (would resend an already-acknowledged id if reused)
+		comboFragments.values().removeIf(combo -> containsId(combo.getIds(), fragSeqNumber));
+	}
+
+	private static boolean containsId(int[] ids, int id) {
+		for (int candidate : ids) {
+			if (candidate == id) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** marks every fragment id strictly below seqNumber as acknowledged */

@@ -42,10 +42,11 @@ the configured QR code capacity (`QREncodeSetting` — QR version, error-correct
 each fragment with a `"<id> <code> <len> <crc32>\n"` header (`code` is `1` for a plain fragment, `2`-`8` for an
 XOR "combo" redundancy fragment — see below), and renders each as a `BufferedImage` via ZXing
 (`QRCodeWriter`/`MatrixToImageWriter`). `QRCodeEncodedFragment` wraps one fragment's image; `QRCodesEncoderChannel`
-exposes the full set as `FragmentImg`s for the UI to cycle through and display on screen. When `QREncodeSetting`'s
-combo redundancy is enabled, `scheduleComboFragments` additionally emits "combo" fragments that XOR together `code`
-consecutive plain fragments (`ByteArrayXorUtils`), letting the decoder recover one missing plain fragment per combo
-without retransmission.
+exposes the full set as `FragmentImg`s for the UI to cycle through and display on screen. `nextFragmentToSend`
+delegates the choice of which fragment(s) to send next to `NextFragmentIdsChoiceStrategy`, which — when
+`QREncodeSetting`'s combo redundancy or combo frequency is enabled — periodically picks a "combo" `ComboCode`
+(XOR2/XOR3) instead of a plain fragment, XORing together that many still-pending fragments (`ByteArrayXorUtils`)
+so the decoder can recover one missing plain fragment per combo without retransmission.
 
 **Decode side** (`impl/decode`): `QRCodesDecoderChannel` owns an `ImageStreamProvider` (pulls frames from an
 `ImageProvider`) and an `ImageStreamCallback` (currently `ZXingQRStreamFromImageStreamCallback`; a ZBar-based

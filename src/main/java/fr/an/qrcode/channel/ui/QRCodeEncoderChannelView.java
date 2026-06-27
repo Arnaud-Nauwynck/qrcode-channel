@@ -76,7 +76,7 @@ public class QRCodeEncoderChannelView {
     private JNumberField xor3FrequencyField;
 
     private JLabel acknowledgeInfoLabel;
-    private JTextField acknowledgeSeqNumberField;
+    private JNumberField acknowledgeSeqNumberField;
     private JTextField acknowledgeAddField;
 
     private ImageCanvas qrCodeImageCanvas;
@@ -267,15 +267,8 @@ public class QRCodeEncoderChannelView {
                 acknowledgeInfoLabel = new JLabel(" ack:");
                 acknowledgePanel.add(acknowledgeInfoLabel);
 
-                acknowledgeSeqNumberField = new JTextField(3);
-                acknowledgeSeqNumberField.addKeyListener(new KeyAdapter() {
-                	public void keyPressed(KeyEvent event) {
-                		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
-                			int seq = Integer.parseInt(acknowledgeSeqNumberField.getText());
-                			model.setAckSeqNumber(seq);
-                		}
-                	}
-                });
+                acknowledgeSeqNumberField = new JNumberField(3);
+                acknowledgeSeqNumberField.onEnterCommit(model::setAckSeqNumber);
                 acknowledgePanel.add(acknowledgeSeqNumberField);
 
                 JPanel ackButtonsPanel = new JPanel();
