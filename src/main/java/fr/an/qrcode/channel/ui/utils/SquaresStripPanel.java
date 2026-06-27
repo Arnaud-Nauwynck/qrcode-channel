@@ -6,17 +6,21 @@ import java.awt.Graphics;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import javax.swing.JComponent;
 
 /**
  * generic horizontal strip of small aligned squares, one per item, colored by a caller-supplied function.
+ * an optional highlight predicate draws a distinct border around matching squares (e.g. the currently
+ * displayed/selected item), independently of the fill color.
  */
 public class SquaresStripPanel<T> extends JComponent {
 
 	private final int square;
 	private final int gap;
 	private final Function<T, Color> colorFn;
+	private Predicate<T> highlightFn = t -> false;
 
 	private List<T> items = new ArrayList<>();
 
@@ -24,6 +28,10 @@ public class SquaresStripPanel<T> extends JComponent {
 		this.square = square;
 		this.gap = gap;
 		this.colorFn = colorFn;
+	}
+
+	public void setHighlightFn(Predicate<T> highlightFn) {
+		this.highlightFn = highlightFn != null ? highlightFn : (t -> false);
 	}
 
 	public void refresh(List<T> newItems) {
@@ -41,8 +49,12 @@ public class SquaresStripPanel<T> extends JComponent {
 		for (T item : items) {
 			g.setColor(colorFn.apply(item));
 			g.fillRect(x, gap, square, square);
-			g.setColor(Color.DARK_GRAY);
+			boolean highlighted = highlightFn.test(item);
+			g.setColor(highlighted ? Color.BLUE : Color.DARK_GRAY);
 			g.drawRect(x, gap, square, square);
+			if (highlighted) {
+				g.drawRect(x - 1, gap - 1, square + 2, square + 2);
+			}
 			x += square + gap;
 		}
 	}

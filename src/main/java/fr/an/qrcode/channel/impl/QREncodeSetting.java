@@ -39,6 +39,12 @@ public class QREncodeSetting {
     private boolean comboRedundancyEnabled = false;
     private int[] comboGroupSizes = new int[] { 1, 2, 3 };
 
+    // alternate combo strategy: instead of cycling comboGroupSizes, insert a xor2 combo every xor2Frequency
+    // displays, and a xor3 combo every xor3Frequency displays (xor3 takes priority when both would trigger).
+    private boolean comboFrequencyEnabled = false;
+    private int xor2Frequency = 5;
+    private int xor3Frequency = 10;
+
 
     public QREncodeSetting() {
 		qrHints = new HashMap<>();
@@ -88,6 +94,30 @@ public class QREncodeSetting {
 
 	public void setComboGroupSizes(int[] p) {
 		this.comboGroupSizes = p;
+	}
+
+	public boolean isComboFrequencyEnabled() {
+		return comboFrequencyEnabled;
+	}
+
+	public void setComboFrequencyEnabled(boolean p) {
+		this.comboFrequencyEnabled = p;
+	}
+
+	public int getXor2Frequency() {
+		return xor2Frequency;
+	}
+
+	public void setXor2Frequency(int p) {
+		this.xor2Frequency = p;
+	}
+
+	public int getXor3Frequency() {
+		return xor3Frequency;
+	}
+
+	public void setXor3Frequency(int p) {
+		this.xor3Frequency = p;
 	}
 
 }

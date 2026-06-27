@@ -27,6 +27,11 @@ public class FragmentImg {
 		this.img = null;
 	}
 
+	/** marks this fragment as (re-)displayed alone, incrementing its plain-sent counter */
+	public void incrSentPlainCount() {
+		owner.incrSentCount(1);
+	}
+
 	public int getSentPlainCount() {
 		return owner.getSentPlainCount();
 	}

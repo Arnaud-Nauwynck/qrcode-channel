@@ -3,12 +3,16 @@ package fr.an.qrcode.channel.ui;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeListener;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.SwingUtilities;
 import javax.swing.event.SwingPropertyChangeSupport;
 
+import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.FragmentState;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,10 +38,9 @@ import fr.an.qrcode.channel.impl.util.DimInt2D;
  * wrap event callbacks with SwingUtilities.invokeLater
  * handle creation / reset of QRCodesDecoderChannel
  */
+@Slf4j
 public class QRCodeDecoderChannelModel {
-	
-	private static final Logger log = LoggerFactory.getLogger(QRCodeDecoderChannelModel.class);
-	
+
     private SwingPropertyChangeSupport pcs = new SwingPropertyChangeSupport(this);
     private DecoderChannelListener uiEventListener;
 
@@ -52,17 +55,22 @@ public class QRCodeDecoderChannelModel {
 
     private String calib3dConfParamsName = "default-calib3d.data";
     OpenCvCalib3dImageProvider calib3dImageProvider;
+	@Getter
     OpenCvCalib3d calib3d;
 
     private Map<DecodeHintType, Object> qrDecoderHints = QRCodeUtils.createDefaultDecoderHints();
 
     private QRCodesDecoderChannel decoderChannel;
 
+	@Getter
     private String fullText = "";
+	@Getter
     private BufferedImage currentScreenshotImg;
     private String currDecodeMsg;
+	@Getter
     private String recognitionStatsText;
-    private QRCapturedEvent currQRCapturedEvent;
+    @Getter
+	private QRCapturedEvent currQRCapturedEvent;
 
 	private AtomicBoolean pendingRefresh = new AtomicBoolean();
 
@@ -164,10 +172,6 @@ public class QRCodeDecoderChannelModel {
         		this.decoderChannel.getNextSequenceNumber();
     }
 
-    public String getFullText() {
-        return fullText;
-    }
-
     public void setFullText(String p) {
     	String prev = fullText;
         this.fullText = p;
@@ -180,24 +184,10 @@ public class QRCodeDecoderChannelModel {
         pcs.firePropertyChange("currentScreenshotImg", prev, p);
 	}
 
-	public BufferedImage getCurrentScreenshotImg() {
-        return currentScreenshotImg;
-    }
 
-	public String getRecognitionStatsText() {
-		return recognitionStatsText;
-	}
-
-	public QRCapturedEvent getCurrQRCapturedEvent() {
-		return currQRCapturedEvent;
-	}
 
 	// delegate to calib3d
 	// --------------------------------------------------------------------------------------------
-
-	public OpenCvCalib3d getCalib3d() {
-		return calib3d;
-	}
 
 	public void calib3dSaveConfParams() {
 		if (this.calib3d.isCalibrated()) {
@@ -266,7 +256,7 @@ public class QRCodeDecoderChannelModel {
 		return currDecodeMsg;
 	}
 
-	public java.util.List<QRCodesDecoderChannel.FragmentState> getFragmentStates() {
+	public List<FragmentState> getFragmentStates() {
 		return decoderChannel.getFragmentStates();
 	}
 

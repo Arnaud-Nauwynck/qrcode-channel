@@ -39,14 +39,14 @@ public class QRCodesEncoderChannel {
 	/** ids of plain fragments not yet acknowledged by the decoder; drives what nextFragmentToSend() emits */
 	private LinkedHashSet<Integer> pendingIds = new LinkedHashSet<>();
 
-	/** round-robin cursor over pendingIds, cycling group sizes from QREncodeSetting.comboGroupSizes */
-	private int sendCursor = 0;
-	private int comboGroupSizeIndex = 0;
+	/** decides which pending FragmentSelection (code+index) to send next; cf. nextFragmentToSend() */
+	private NextFragmentIdsChoiceStrategy nextFragmentIdsChoiceStrategy;
 
 	// ------------------------------------------------------------------------
 
 	public QRCodesEncoderChannel(QREncodeSetting encodeSetting) {
 		this.qrEncodeSettings = encodeSetting;
+		this.nextFragmentIdsChoiceStrategy = new NextFragmentIdsChoiceStrategy(encodeSetting);
 	}
 
 	// ------------------------------------------------------------------------
@@ -92,10 +92,9 @@ public class QRCodesEncoderChannel {
 	}
 
 	/**
-	 * computes the next fragment to transmit: a round-robin walk over still-pending (non-acknowledged) fragment
-	 * ids, cycling through QREncodeSetting.comboGroupSizes -- e.g. sizes {1,2,3} alternates between sending one
-	 * pending fragment plain, XOR-ing it with the next pending one, then with the next two pending ones, so the
-	 * decoder can recover a fragment from a combo once all-but-one of its members become known by any means.
+	 * computes the next fragment to transmit: delegates the choice of which still-pending (non-acknowledged)
+	 * fragment id(s) to send to nextFragmentIdsChoiceStrategy (plain, or XOR-ed together as a 2/3-way combo, so
+	 * the decoder can recover a fragment from a combo once all-but-one of its members become known by any means);
 	 * returns null once every fragment has been acknowledged.
 	 */
 	public QRCodeEncodedFragment nextFragmentToSend() {
@@ -103,30 +102,9 @@ public class QRCodesEncoderChannel {
 			return null;
 		}
 		List<Integer> pendingList = new ArrayList<>(pendingIds);
-		int n = pendingList.size();
-		if (sendCursor >= n) {
-			sendCursor = 0;
-		}
 
-		int groupSize = 1;
-		if (qrEncodeSettings.isComboRedundancyEnabled()) {
-			int[] groupSizes = qrEncodeSettings.getComboGroupSizes();
-			if (groupSizes.length > 0) {
-				if (comboGroupSizeIndex >= groupSizes.length) {
-					comboGroupSizeIndex = 0;
-				}
-				groupSize = Math.max(1, groupSizes[comboGroupSizeIndex]);
-				comboGroupSizeIndex++;
-			}
-		}
-		groupSize = Math.min(groupSize, n);
-
-		int[] ids = new int[groupSize];
-		for (int i = 0; i < groupSize; i++) {
-			ids[i] = pendingList.get((sendCursor + i) % n);
-		}
-		java.util.Arrays.sort(ids);
-		sendCursor = (sendCursor + 1) % n;
+		FragmentSelection selection = nextFragmentIdsChoiceStrategy.chooseNextIds(pendingList);
+		int[] ids = selection.toIds(pendingList);
 
 		for (int id : ids) {
 			QRCodeEncodedFragment plainFrag = fragments.get(id);

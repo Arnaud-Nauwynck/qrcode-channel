@@ -142,6 +142,49 @@ public class QRCodesEncoderChannelTest {
 		assertTrue("expected to see 3-way combos", codesSeen[3] > 0);
 	}
 
+	@Test
+	public void testNextFragmentToSend_comboFrequencySchedule() {
+		QREncodeSetting settings = new QREncodeSetting();
+		settings.setComboFrequencyEnabled(true);
+		settings.setXor2Frequency(2);
+		settings.setXor3Frequency(7);
+		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(settings);
+		encoder.appendFragmentsFor(randomASCII(2000)); // -> 10 plain fragments
+
+		assertEquals(10, encoder.getFragmentImgs().size());
+
+		// xor2 due every 2 sends (own cursor, advancing by group size: (1,2), then (3,4), ...);
+		// xor3 due every 7 sends (own cursor, advancing by group size: (1,2,3), then (4,5,6), ...)
+		String[] expected = {
+				"single(1)",
+				"single(2)",
+				"xor2(1,2)",
+				"single(3)",
+				"single(4)",
+				"xor2(3,4)",
+				"xor3(1,2,3)",
+				"single(5)",
+				"single(6)",
+				"xor2(5,6)",
+		};
+
+		for (String expectedLabel : expected) {
+			QRCodeEncodedFragment frag = encoder.nextFragmentToSend();
+			assertEquals(expectedLabel, labelFor(frag));
+		}
+	}
+
+	private static String labelFor(QRCodeEncodedFragment frag) {
+		int[] ids = frag.getIds();
+		String idsCsv = java.util.stream.IntStream.of(ids).mapToObj(Integer::toString).collect(java.util.stream.Collectors.joining(","));
+		switch (frag.getCode()) {
+			case 1: return "single(" + idsCsv + ")";
+			case 2: return "xor2(" + idsCsv + ")";
+			case 3: return "xor3(" + idsCsv + ")";
+			default: return "code" + frag.getCode() + "(" + idsCsv + ")";
+		}
+	}
+
 	private byte[] fragmentDataFor(QRCodesEncoderChannel encoder, int[] ids) {
 		Map<Integer, FragmentImg> plainImgs = encoder.getFragmentImgs();
 		java.util.List<byte[]> sourceBytes = new java.util.ArrayList<>();

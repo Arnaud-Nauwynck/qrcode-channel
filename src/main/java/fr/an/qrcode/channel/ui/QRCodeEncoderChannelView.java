@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
@@ -27,11 +29,11 @@ import javax.swing.JToolBar;
 
 import org.apache.commons.io.FileUtils;
 
-import fr.an.qrcode.channel.impl.QREncodeSetting;
 import fr.an.qrcode.channel.impl.encode.FragmentImg;
 import fr.an.qrcode.channel.impl.encode.QRCodeEncodedFragment;
 import fr.an.qrcode.channel.ui.QRCodeEncoderChannelModel.DisplayMode;
 import fr.an.qrcode.channel.ui.utils.ImageCanvas;
+import fr.an.qrcode.channel.ui.utils.JNumberField;
 import fr.an.qrcode.channel.ui.utils.SquaresStripPanel;
 
 /**
@@ -56,6 +58,9 @@ public class QRCodeEncoderChannelView {
 
     private JPanel playerTabPanel;
     private JToolBar playerToolbar;
+    private JPanel playerSidePanel;
+    private JPanel qrCodeParamsPanel;
+    private JPanel acknowledgePanel;
     private JCheckBox rgbSplitModeCheckBox;
     private JButton prevQRCodeButton;
     private JTextField qrCodeNumberField;
@@ -65,6 +70,10 @@ public class QRCodeEncoderChannelView {
     private JTextField millisBetweenImageField;
     private JButton playQRCodeButton;
     private JButton stopQRCodeButton;
+
+    private JCheckBox comboFrequencyEnabledCheckBox;
+    private JNumberField xor2FrequencyField;
+    private JNumberField xor3FrequencyField;
 
     private JLabel acknowledgeInfoLabel;
     private JTextField acknowledgeSeqNumberField;
@@ -212,42 +221,85 @@ public class QRCodeEncoderChannelView {
             playerToolbar.add(stopQRCodeButton);
 
 
-            acknowledgeInfoLabel = new JLabel(" ack:");
-            playerToolbar.add(acknowledgeInfoLabel);
-
-            acknowledgeSeqNumberField = new JTextField(3);
-            acknowledgeSeqNumberField.addKeyListener(new KeyAdapter() {
-            	public void keyPressed(KeyEvent event) {
-            		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
-            			int seq = Integer.parseInt(acknowledgeSeqNumberField.getText());
-            			model.setAckSeqNumber(seq);
-            		}
-            	}
-            });
-
-            playerToolbar.add(createAckButton(5));
-            playerToolbar.add(createAckButton(10));
-            playerToolbar.add(createAckButton(20));
-            playerToolbar.add(createAckButton(50));
-
-
-            acknowledgeAddField = new JTextField();
-            acknowledgeAddField.addKeyListener(new KeyAdapter() {
-            	public void keyPressed(KeyEvent event) {
-            		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
-            			String text = acknowledgeAddField.getText();
-            			model.addAcknowledge(text);
-            		}
-            	}
-            });
-            playerToolbar.add(acknowledgeAddField);
-
-
             qrCodeImageCanvas = new ImageCanvas();
-            qrCodeImageCanvas.setPreferredSize(new Dimension(250, 250));
+            qrCodeImageCanvas.setPreferredSize(new Dimension(450, 450));
             JPanel qrCodeImageHolderPanel = new JPanel();
             qrCodeImageHolderPanel.add(qrCodeImageCanvas);
             playerTabPanel.add(qrCodeImageHolderPanel, BorderLayout.CENTER);
+
+
+            playerSidePanel = new JPanel();
+            playerSidePanel.setLayout(new BoxLayout(playerSidePanel, BoxLayout.Y_AXIS));
+
+            { // qrCodeParamsPanel
+                qrCodeParamsPanel = new JPanel();
+                qrCodeParamsPanel.setLayout(new BoxLayout(qrCodeParamsPanel, BoxLayout.Y_AXIS));
+                qrCodeParamsPanel.setBorder(BorderFactory.createTitledBorder("QRCode params"));
+
+                comboFrequencyEnabledCheckBox = new JCheckBox("combo freq");
+                comboFrequencyEnabledCheckBox.setSelected(model.getEncodeSetting().isComboFrequencyEnabled());
+                comboFrequencyEnabledCheckBox.addActionListener(
+                		e -> model.getEncodeSetting().setComboFrequencyEnabled(comboFrequencyEnabledCheckBox.isSelected()));
+                qrCodeParamsPanel.add(comboFrequencyEnabledCheckBox);
+
+                JPanel xor2Panel = new JPanel();
+                xor2Panel.add(new JLabel("xor2 every: "));
+                xor2FrequencyField = new JNumberField(model.getEncodeSetting().getXor2Frequency(), 3);
+                xor2FrequencyField.onEnterCommit(model.getEncodeSetting()::setXor2Frequency);
+                xor2Panel.add(xor2FrequencyField);
+                qrCodeParamsPanel.add(xor2Panel);
+
+                JPanel xor3Panel = new JPanel();
+                xor3Panel.add(new JLabel("xor3 every: "));
+                xor3FrequencyField = new JNumberField(model.getEncodeSetting().getXor3Frequency(), 3);
+                xor3FrequencyField.onEnterCommit(model.getEncodeSetting()::setXor3Frequency);
+                xor3Panel.add(xor3FrequencyField);
+                qrCodeParamsPanel.add(xor3Panel);
+
+                playerSidePanel.add(qrCodeParamsPanel);
+            }
+
+            { // acknowledgePanel
+                acknowledgePanel = new JPanel();
+                acknowledgePanel.setLayout(new BoxLayout(acknowledgePanel, BoxLayout.Y_AXIS));
+                acknowledgePanel.setBorder(BorderFactory.createTitledBorder("Acknowledge"));
+
+                acknowledgeInfoLabel = new JLabel(" ack:");
+                acknowledgePanel.add(acknowledgeInfoLabel);
+
+                acknowledgeSeqNumberField = new JTextField(3);
+                acknowledgeSeqNumberField.addKeyListener(new KeyAdapter() {
+                	public void keyPressed(KeyEvent event) {
+                		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
+                			int seq = Integer.parseInt(acknowledgeSeqNumberField.getText());
+                			model.setAckSeqNumber(seq);
+                		}
+                	}
+                });
+                acknowledgePanel.add(acknowledgeSeqNumberField);
+
+                JPanel ackButtonsPanel = new JPanel();
+                ackButtonsPanel.add(createAckButton(5));
+                ackButtonsPanel.add(createAckButton(10));
+                ackButtonsPanel.add(createAckButton(20));
+                ackButtonsPanel.add(createAckButton(50));
+                acknowledgePanel.add(ackButtonsPanel);
+
+                acknowledgeAddField = new JTextField();
+                acknowledgeAddField.addKeyListener(new KeyAdapter() {
+                	public void keyPressed(KeyEvent event) {
+                		if (event.getKeyCode() == KeyEvent.VK_ENTER) {
+                			String text = acknowledgeAddField.getText();
+                			model.addAcknowledge(text);
+                		}
+                	}
+                });
+                acknowledgePanel.add(acknowledgeAddField);
+
+                playerSidePanel.add(acknowledgePanel);
+            }
+
+            playerTabPanel.add(playerSidePanel, BorderLayout.EAST);
 
 
             qrDetailPanel = new JPanel(new BorderLayout());
@@ -370,6 +422,11 @@ public class QRCodeEncoderChannelView {
         qrDetailShowAllChannelsCheckBox.setEnabled(group.size() > 1);
         updateDetailTexts(group);
 
+        java.util.Set<Integer> displayedIds = new java.util.HashSet<>();
+        for (FragmentImg displayed : group) {
+        	displayedIds.add(displayed.getFragmentNumber());
+        }
+        fragmentsStatusPanel.setHighlightFn(f -> displayedIds.contains(f.getFragmentNumber()));
         fragmentsStatusPanel.refresh(model.getFragmentImgsList());
     }
 
@@ -408,14 +465,15 @@ public class QRCodeEncoderChannelView {
     	}
     }
 
-    /** grey if acknowledged, else colored from pale to deep orange/red by sent-count intensity */
+    /** grey if acknowledged, else yellow (never sent) -> orange -> red as the sent count increases */
     private static Color colorForEncodedFragment(FragmentImg frag) {
     	if (frag.isAcknowledge()) {
     		return Color.LIGHT_GRAY;
     	}
     	int sentCount = frag.getSentPlainCount() + frag.getSentXor2Count() + frag.getSentXor3Count();
-    	float intensity = 1f - 1f / (1f + sentCount);
-    	int green = Math.round(255 * (1f - intensity));
+    	int maxStep = 4; // sentCount >= maxStep is fully red
+    	float t = Math.min(sentCount, maxStep) / (float) maxStep;
+    	int green = Math.round(255 * (1f - t));
     	return new Color(255, green, 0);
     }
 

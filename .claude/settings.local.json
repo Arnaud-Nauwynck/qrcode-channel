@@ -17,7 +17,29 @@
       "Bash(echo \"EXIT:$?\")",
       "Bash(find ~/.m2 -name '*.jar')",
       "Bash(python3 -c ' *)",
-      "Bash(mvn -o dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt -q)"
+      "Bash(mvn -o dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt -q)",
+      "Bash(mvn -q -o test -Dtest=QRCodesEncoderChannelTest#testNextFragmentToSend_comboFrequencySchedule)",
+      "Bash(mvn -q -o test -Dtest=NextFragmentIdsChoiceStrategyTest)",
+      "Bash(mvn -q compile)",
+      "Skill(run)",
+      "Bash(mvn -q dependency:build-classpath -Dmdep.outputFile=cp.txt)",
+      "Bash(cd \"C:\\\\arn\\\\devPerso\\\\my-github\\\\qrcode-channel\")",
+      "Bash(cat cp.txt)",
+      "Bash(java -cp 'target/classes;__TRACKED_VAR__' fr.an.qrcode.channel.QRCodeChannelEncoderApp)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(sleep 3)",
+      "Bash(mvn -q -Dtest=NextFragmentIdsChoiceStrategyTest test)",
+      "Bash(git stash *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(mvn -q dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt)",
+      "Bash(mkdir -p /tmp/out)",
+      "Bash(javac -cp 'target/classes;__TRACKED_VAR__' -d /tmp/out src/main/java/fr/an/qrcode/channel/impl/encode/*.java src/main/java/fr/an/qrcode/channel/impl/QREncodeSetting.java src/main/java/fr/an/qrcode/channel/impl/QRCodeUtils.java src/main/java/fr/an/qrcode/channel/impl/QRCodecChannelUtils.java src/main/java/fr/an/qrcode/channel/impl/util/ByteArrayXorUtils.java)",
+      "Bash(javac -cp '/tmp/out;target/classes;__TRACKED_VAR__' -d /tmp/out src/test/java/fr/an/qrcode/channel/impl/encode/NextFragmentIdsChoiceStrategyTest.java src/test/java/fr/an/qrcode/channel/impl/encode/QRCodesEncoderChannelTest.java)",
+      "Bash(java -cp '/tmp/out;target/classes;__TRACKED_VAR__' org.junit.runner.JUnitCore fr.an.qrcode.channel.impl.encode.NextFragmentIdsChoiceStrategyTest fr.an.qrcode.channel.impl.encode.QRCodesEncoderChannelTest)",
+      "Skill(code-review)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(awk '/^commit /{c=$2} /fragmentHeaderPattern = Pattern.compile\\\\\\(\"\\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\)\"\\\\\\)/{print c}')"
     ]
   }
 }

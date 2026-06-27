@@ -15,7 +15,6 @@ import fr.an.qrcode.channel.ui.QRCodeEncoderChannelView;
 
 public class QRCodeChannelEncoderApp {
 
-
     /**
      * @param args
      */
@@ -29,29 +28,26 @@ public class QRCodeChannelEncoderApp {
     }
 
     public static void doMain(String[] args) {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-            	QRCodeEncoderChannelModel model = new QRCodeEncoderChannelModel(new QREncodeSetting());
-                QRCodeEncoderChannelView view = new QRCodeEncoderChannelView(model);
+        QRCodeEncoderChannelModel model = new QRCodeEncoderChannelModel(new QREncodeSetting());
+        String content;
+        try {
+            content = FileUtils.readFileToString(new File("pom.xml"));
+        } catch (IOException e) {
+            content = "ERROR";
+        }
+        model.computeQRCodes(content);
 
-                String content;
-                try {
-                	content = FileUtils.readFileToString(new File("pom.xml"));
-				} catch (IOException e) {
-					content = "ERROR";
-				}
-                model.computeQRCodes(content);
+        SwingUtilities.invokeLater(() -> {
+            QRCodeEncoderChannelView view = new QRCodeEncoderChannelView(model);
 
-                JFrame frame = new JFrame();
-                frame.getContentPane().add(view.getJComponent());
+            JFrame frame = new JFrame();
+            frame.getContentPane().add(view.getJComponent());
 
-                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-                frame.pack();
-                frame.setVisible(true);
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.pack();
+            frame.setVisible(true);
 
-                frame.setBounds(new Rectangle(1000, 50, 850, 850));
-            }
-
+            frame.setBounds(new Rectangle(1000, 50, 850, 800));
         });
     }
 

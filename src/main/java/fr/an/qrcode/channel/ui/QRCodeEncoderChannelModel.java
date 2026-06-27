@@ -145,7 +145,7 @@ public class QRCodeEncoderChannelModel {
     	// first few sends.. to autocalibrate webcam brightness..
     	int firstPreviewSends = 15;
     	for (int i = 0; i < firstPreviewSends; i++) {
-    		if (!displayNextFragmentToSend()) {
+    		if (!sendNextFragmentOnEdt()) {
     			break; // already fully acknowledged
     		}
 			try {
@@ -158,7 +158,7 @@ public class QRCodeEncoderChannelModel {
 			}
 		}
 
-    	while (displayNextFragmentToSend()) {
+    	while (sendNextFragmentOnEdt()) {
 			try {
 				Thread.sleep(millisBetweenImg);
 			} catch (InterruptedException e) {
@@ -171,9 +171,21 @@ public class QRCodeEncoderChannelModel {
     	displayLoopRunning.set(false);
     }
 
-    /** pulls the next fragment(s) to send from the encoder channel (1 in BLACK_WHITE mode, up to 3 in RGB_SPLIT mode) and displays them; returns false once fully acknowledged */
-    private boolean displayNextFragmentToSend() {
-    	if (encoderChannel.isFullyAcknowledged()) {
+    /** runs the play loop's auto-advance (round-robin pending-id combo schedule from the encoder channel) on the EDT */
+    private boolean sendNextFragmentOnEdt() {
+    	AtomicBoolean sent = new AtomicBoolean(false);
+		try {
+			SwingUtilities.invokeAndWait(() -> sent.set(autoAdvanceNextFragmentToSend()));
+		} catch (Exception e) {
+		}
+		return sent.get();
+    }
+
+    /** pulls the next fragment(s) to send from the encoder channel's round-robin pending-id/combo schedule, increments
+     * their sent counters, and displays them; returns false once fully acknowledged. used only by the "Start" play
+     * loop -- "next"/"prev" buttons instead step currDisplayIndex by groupSize(), cf onDisplayNextFrag/onDisplayPrevFrag. */
+    private boolean autoAdvanceNextFragmentToSend() {
+    	if (encoderChannel == null || encoderChannel.isFullyAcknowledged()) {
     		return false;
     	}
     	List<FragmentImg> group = new ArrayList<>();
@@ -187,38 +199,55 @@ public class QRCodeEncoderChannelModel {
     	if (group.isEmpty()) {
     		return false;
     	}
-		try {
-			SwingUtilities.invokeAndWait(() -> setCurrentDisplayGroup(group));
-		} catch (Exception e) {
-		}
-		return true;
-    }
-
-    public void onDisplayNextFrag() {
-    	if (fragmentImgs == null) {
-    		// should click "compute" before!
-    		return;
-    	}
-    	int groupSize = groupSize();
-    	int n = currDisplayIndex + groupSize;
-    	if (n <= fragmentImgs.size()) {
-    		setCurrentDisplayGroupAt(n);
-    	}
+    	setCurrentDisplayGroup(group);
+    	return true;
     }
 
 	public void onDisplayFrag(int n) {
 		setCurrentDisplayGroupAt(n);
 	}
 
-    public void onDisplayPrevFrag() {
-    	if (fragmentImgs == null) {
-    		return;
+    /** moves currDisplayIndex forward by groupSize(), wrapping to 1 past the end, and (re-)sends the fragment(s) landed on */
+    public boolean onDisplayNextFrag() {
+    	if (fragmentImgs == null || fragmentImgs.isEmpty()) {
+    		return false;
     	}
-    	int groupSize = groupSize();
-    	int n = currDisplayIndex - groupSize;
-    	if (n >= 1) {
-    		setCurrentDisplayGroupAt(n);
+    	int n = currDisplayIndex + groupSize();
+    	if (n > fragmentImgs.size()) {
+    		n = 1;
     	}
+    	return moveDisplayIndexAndResend(n);
+    }
+
+    /** moves currDisplayIndex backward by groupSize(), wrapping to the end, and (re-)sends the fragment(s) landed on */
+    public boolean onDisplayPrevFrag() {
+    	if (fragmentImgs == null || fragmentImgs.isEmpty()) {
+    		return false;
+    	}
+    	int n = currDisplayIndex - groupSize();
+    	if (n < 1) {
+    		n = fragmentImgs.size();
+    	}
+    	return moveDisplayIndexAndResend(n);
+    }
+
+    /** sets the display group at fragment index n, incrementing the plain-sent counter of each fragment landed on
+     * (so the squares-strip color reflects "displayed" regardless of whether the move came from next/prev/start) */
+    private boolean moveDisplayIndexAndResend(int n) {
+    	int clamped = Math.max(1, Math.min(n, fragmentImgs.size()));
+    	List<FragmentImg> group = new ArrayList<>();
+    	for (int i = clamped; i < clamped + groupSize() && i <= fragmentImgs.size(); i++) {
+    		FragmentImg frag = fragmentImgs.get(i);
+    		if (frag != null) {
+    			frag.incrSentPlainCount();
+    			group.add(frag);
+    		}
+    	}
+    	if (group.isEmpty()) {
+    		return false;
+    	}
+    	setCurrentDisplayGroup(group);
+    	return true;
     }
 
 	public void addAcknowledge(String text) {
