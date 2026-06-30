@@ -94,6 +94,9 @@ public class QRCodeDecoderChannelView {
     private ImageCanvas qrCodeRedCanvas;
     private ImageCanvas qrCodeGreenCanvas;
     private ImageCanvas qrCodeBlueCanvas;
+    private JTextArea qrCodeRedHistoryArea;
+    private JTextArea qrCodeGreenHistoryArea;
+    private JTextArea qrCodeBlueHistoryArea;
 
     private JPanel metadataTabPanel;
     private JTextArea metadataTextArea;
@@ -255,6 +258,10 @@ public class QRCodeDecoderChannelView {
             qrCodeGreenCanvas.setPreferredSize(new Dimension(250, 250));
             qrCodeBlueCanvas = new ImageCanvas();
             qrCodeBlueCanvas.setPreferredSize(new Dimension(250, 250));
+
+            qrCodeRedHistoryArea = makeChannelHistoryArea();
+            qrCodeGreenHistoryArea = makeChannelHistoryArea();
+            qrCodeBlueHistoryArea = makeChannelHistoryArea();
 
             updateDetailImageLayout();
         }
@@ -469,23 +476,29 @@ public class QRCodeDecoderChannelView {
         // saveFileMessageLabel.setText();
     }
 
+    private static JTextArea makeChannelHistoryArea() {
+        JTextArea area = new JTextArea(8, 20);
+        area.setEditable(false);
+        area.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 10));
+        return area;
+    }
+
+    private static JPanel makeChannelPanel(String label, ImageCanvas canvas, JTextArea historyArea) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(new JLabel(label, JLabel.CENTER), BorderLayout.NORTH);
+        panel.add(canvas, BorderLayout.CENTER);
+        panel.add(new JScrollPane(historyArea), BorderLayout.SOUTH);
+        return panel;
+    }
+
     private void updateDetailImageLayout() {
         boolean rgb = model.isRgbSplitMode();
         detailImageTabPanel.removeAll();
         if (rgb) {
             JPanel rgbPanel = new JPanel(new GridLayout(1, 3));
-            JPanel redPanel = new JPanel(new BorderLayout());
-            redPanel.add(new JLabel("Red", JLabel.CENTER), BorderLayout.NORTH);
-            redPanel.add(qrCodeRedCanvas, BorderLayout.CENTER);
-            JPanel greenPanel = new JPanel(new BorderLayout());
-            greenPanel.add(new JLabel("Green", JLabel.CENTER), BorderLayout.NORTH);
-            greenPanel.add(qrCodeGreenCanvas, BorderLayout.CENTER);
-            JPanel bluePanel = new JPanel(new BorderLayout());
-            bluePanel.add(new JLabel("Blue", JLabel.CENTER), BorderLayout.NORTH);
-            bluePanel.add(qrCodeBlueCanvas, BorderLayout.CENTER);
-            rgbPanel.add(redPanel);
-            rgbPanel.add(greenPanel);
-            rgbPanel.add(bluePanel);
+            rgbPanel.add(makeChannelPanel("Red",   qrCodeRedCanvas,   qrCodeRedHistoryArea));
+            rgbPanel.add(makeChannelPanel("Green", qrCodeGreenCanvas, qrCodeGreenHistoryArea));
+            rgbPanel.add(makeChannelPanel("Blue",  qrCodeBlueCanvas,  qrCodeBlueHistoryArea));
             detailImageTabPanel.add(rgbPanel, BorderLayout.CENTER);
         } else {
             detailImageTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
@@ -503,10 +516,39 @@ public class QRCodeDecoderChannelView {
     	    qrCodeRedCanvas.repaint();
     	    qrCodeGreenCanvas.repaint();
     	    qrCodeBlueCanvas.repaint();
+    	    updateChannelHistoryAreas();
     	} else {
     	    qrCodeImageCanvas.setImage(image);
     	    qrCodeImageCanvas.repaint();
     	}
+    }
+
+    private void updateChannelHistoryAreas() {
+        java.util.List<fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent> history = model.getQRCapturedEventHistory();
+        qrCodeRedHistoryArea.setText(buildChannelHistory(history, 0));
+        qrCodeGreenHistoryArea.setText(buildChannelHistory(history, 1));
+        qrCodeBlueHistoryArea.setText(buildChannelHistory(history, 2));
+    }
+
+    /** builds a multi-line history string for one channel index across recent events, newest first */
+    private static String buildChannelHistory(
+            java.util.List<fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent> history, int channelIndex) {
+        StringBuilder sb = new StringBuilder();
+        for (fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent event : history) {
+            fr.an.qrcode.channel.impl.decode.QRResult result =
+                    (event.qrResults != null && channelIndex < event.qrResults.size())
+                    ? event.qrResults.get(channelIndex) : null;
+            if (result != null && result.text != null) {
+                // show only the header line (first line) to keep the display compact
+                String text = result.text;
+                int nl = text.indexOf('\n');
+                sb.append(nl >= 0 ? text.substring(0, nl) : text);
+            } else {
+                sb.append("-");
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
     }
 
     /** extracts one color channel (0=R, 1=G, 2=B) from a color image and returns it as a grayscale BufferedImage */

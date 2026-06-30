@@ -3,6 +3,9 @@ package fr.an.qrcode.channel.ui;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeListener;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -78,6 +81,8 @@ public class QRCodeDecoderChannelModel {
     private String recognitionStatsText;
     @Getter
 	private QRCapturedEvent currQRCapturedEvent;
+	private static final int QR_HISTORY_SIZE = 8;
+	private final Deque<QRCapturedEvent> qrCapturedEventHistory = new ArrayDeque<>();
 
 	// lombok @Getter above isn't generating these under the current Java/lombok toolchain -- explicit fallbacks
 	public String getFullText() {
@@ -88,6 +93,11 @@ public class QRCodeDecoderChannelModel {
 	}
 	public QRCapturedEvent getCurrQRCapturedEvent() {
 		return currQRCapturedEvent;
+	}
+
+	/** returns the N most recent captured events, newest first (includes the current one) */
+	public List<QRCapturedEvent> getQRCapturedEventHistory() {
+		return new ArrayList<>(qrCapturedEventHistory);
 	}
 
 	private AtomicBoolean pendingRefresh = new AtomicBoolean();
@@ -193,6 +203,12 @@ public class QRCodeDecoderChannelModel {
     		pendingRefresh.set(true);
     		//? pendingRefresh.compareAndSet(false, true);
     		this.currQRCapturedEvent = event.qrEvent;
+    		if (event.qrEvent != null) {
+    			qrCapturedEventHistory.addFirst(event.qrEvent);
+    			while (qrCapturedEventHistory.size() > QR_HISTORY_SIZE) {
+    				qrCapturedEventHistory.removeLast();
+    			}
+    		}
     		
     		SwingUtilities.invokeLater(() -> {
     			try {
