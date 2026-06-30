@@ -12,9 +12,6 @@ import javax.swing.event.SwingPropertyChangeSupport;
 
 import fr.an.qrcode.channel.impl.decode.QRCodesDecoderChannel.FragmentState;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.zxing.DecodeHintType;
 
@@ -30,6 +27,7 @@ import fr.an.qrcode.channel.impl.decode.input.DesktopScreenshotImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.ImageProvider;
 import fr.an.qrcode.channel.impl.decode.input.WebcamImageProvider;
 import fr.an.qrcode.channel.impl.util.DimInt2D;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * model associated to QRCodeDecoderChannelView<BR/>
@@ -64,9 +62,14 @@ public class QRCodeDecoderChannelModel {
 
 	@Getter
     private String fullText = "";
-	@Getter
+	// @Getter
     private BufferedImage currentScreenshotImg;
-    private String currDecodeMsg;
+
+	public BufferedImage getCurrentScreenshotImg() {
+		return currentScreenshotImg;
+	}
+
+	private String currDecodeMsg;
 	@Getter
     private String recognitionStatsText;
     @Getter
@@ -84,7 +87,7 @@ public class QRCodeDecoderChannelModel {
 
     public void reset() {
     	if (this.decoderChannel != null) {
-    		log.info("reset");
+    		// log.info("reset");
     		this.decoderChannel.stopListenSnapshots();
     	}
     	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints,
@@ -152,7 +155,9 @@ public class QRCodeDecoderChannelModel {
 		    		
 		    		uiEventListener.onEvent(event);
     			} catch(Exception ex) {
-    				log.error("Failed", ex);
+    				// log.error("Failed", ex);
+					System.err.println("Failed");
+					ex.printStackTrace(System.err);
     			}
 	    		pendingRefresh.set(false);
 	    	});
