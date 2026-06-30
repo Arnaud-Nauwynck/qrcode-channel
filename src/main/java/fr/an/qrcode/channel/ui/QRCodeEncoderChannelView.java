@@ -71,9 +71,7 @@ public class QRCodeEncoderChannelView {
     private JButton playQRCodeButton;
     private JButton stopQRCodeButton;
 
-    private JCheckBox comboFrequencyEnabledCheckBox;
-    private JNumberField xor2FrequencyField;
-    private JNumberField xor3FrequencyField;
+    private JNumberField numRepairSymbolsField;
 
     private JLabel acknowledgeInfoLabel;
     private JNumberField acknowledgeSeqNumberField;
@@ -236,25 +234,12 @@ public class QRCodeEncoderChannelView {
                 qrCodeParamsPanel.setLayout(new BoxLayout(qrCodeParamsPanel, BoxLayout.Y_AXIS));
                 qrCodeParamsPanel.setBorder(BorderFactory.createTitledBorder("QRCode params"));
 
-                comboFrequencyEnabledCheckBox = new JCheckBox("combo freq");
-                comboFrequencyEnabledCheckBox.setSelected(model.getEncodeSetting().isComboFrequencyEnabled());
-                comboFrequencyEnabledCheckBox.addActionListener(
-                		e -> model.getEncodeSetting().setComboFrequencyEnabled(comboFrequencyEnabledCheckBox.isSelected()));
-                qrCodeParamsPanel.add(comboFrequencyEnabledCheckBox);
-
-                JPanel xor2Panel = new JPanel();
-                xor2Panel.add(new JLabel("xor2 every: "));
-                xor2FrequencyField = new JNumberField(model.getEncodeSetting().getXor2Frequency(), 3);
-                xor2FrequencyField.onEnterCommit(model.getEncodeSetting()::setXor2Frequency);
-                xor2Panel.add(xor2FrequencyField);
-                qrCodeParamsPanel.add(xor2Panel);
-
-                JPanel xor3Panel = new JPanel();
-                xor3Panel.add(new JLabel("xor3 every: "));
-                xor3FrequencyField = new JNumberField(model.getEncodeSetting().getXor3Frequency(), 3);
-                xor3FrequencyField.onEnterCommit(model.getEncodeSetting()::setXor3Frequency);
-                xor3Panel.add(xor3FrequencyField);
-                qrCodeParamsPanel.add(xor3Panel);
+                JPanel numRepairSymbolsPanel = new JPanel();
+                numRepairSymbolsPanel.add(new JLabel("repair symbols: "));
+                numRepairSymbolsField = new JNumberField(model.getEncodeSetting().getNumRepairSymbols(), 3);
+                numRepairSymbolsField.onEnterCommit(model.getEncodeSetting()::setNumRepairSymbols);
+                numRepairSymbolsPanel.add(numRepairSymbolsField);
+                qrCodeParamsPanel.add(numRepairSymbolsPanel);
 
                 playerSidePanel.add(qrCodeParamsPanel);
             }
@@ -463,7 +448,7 @@ public class QRCodeEncoderChannelView {
     	if (frag.isAcknowledge()) {
     		return Color.LIGHT_GRAY;
     	}
-    	int sentCount = frag.getSentPlainCount() + frag.getSentXor2Count() + frag.getSentXor3Count();
+    	int sentCount = frag.getSentCount();
     	int maxStep = 4; // sentCount >= maxStep is fully red
     	float t = Math.min(sentCount, maxStep) / (float) maxStep;
     	int green = Math.round(255 * (1f - t));

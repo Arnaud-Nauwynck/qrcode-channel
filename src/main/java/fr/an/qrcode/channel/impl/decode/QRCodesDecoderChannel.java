@@ -1,13 +1,9 @@
 package fr.an.qrcode.channel.impl.decode;
 
 import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,6 +11,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.zxing.DecodeHintType;
+
+import net.fec.openrq.ArrayDataDecoder;
+import net.fec.openrq.EncodingPacket;
+import net.fec.openrq.OpenRQ;
+import net.fec.openrq.Parsed;
+import net.fec.openrq.decoder.SourceBlockDecoder;
+import net.fec.openrq.decoder.SourceBlockState;
+import net.fec.openrq.parameters.FECParameters;
 
 import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
 import fr.an.qrcode.channel.impl.decode.filter.QRCapturedEvent;
@@ -38,30 +42,20 @@ public class QRCodesDecoderChannel {
     private QRStreamCallback innerQRStreamCallback = new InnerQRStreamCallback();
 
     private String currDecodeMsg;
-	private int nextSequenceNumber = 1;
-	private Map<Integer,QRCodeDecodedFragment> aheadFragments = new LinkedHashMap<>();
 
-	private ByteArrayOutputStream readyBytes = new ByteArrayOutputStream();
+    /** dataLength carried by the FEC-params preamble fragment (fragmentNumber 0); null until received */
+    private Integer paramsDataLength;
+    private FECParameters fecParams;
+    private ArrayDataDecoder dataDecoder;
+    private SourceBlockDecoder sourceBlockDecoder;
 
-	private ComboPacketCache comboCache = new ComboPacketCache();
-
-	/**
-	 * small ring buffer retaining the most recently consumed plain fragments' bytes, keyed by id.
-	 * needed because combo recovery can require XORing against a fragment that was already folded
-	 * into readyBytes (and thus no longer individually retrievable) -- this keeps a window of them
-	 * available, sized to the max supported combo width (code 8).
-	 */
-	private static final int RECENT_CONSUMED_WINDOW = 8;
-	private Map<Integer,byte[]> recentlyConsumedFragments = new LinkedHashMap<Integer,byte[]>() {
-		protected boolean removeEldestEntry(Map.Entry<Integer,byte[]> eldest) {
-			return size() > RECENT_CONSUMED_WINDOW;
-		}
-	};
+    private boolean dataDecoded = false;
+    private byte[] readyBytes = new byte[0];
 
     // emit
 	private DecoderChannelListener eventListener;
-	
-	
+
+
 	// ------------------------------------------------------------------------
 
 	public QRCodesDecoderChannel(
@@ -91,9 +85,9 @@ public class QRCodesDecoderChannel {
 	public void startListenSnapshots() {
 		// qrStreamFromImageStream.onStart();
 		imageStreamProvider.startListenSnapshots();
-		
+
 	}
-	
+
 	public void stopListenSnapshots() {
 		imageStreamProvider.stopListenSnapshots();
 	}
@@ -105,7 +99,7 @@ public class QRCodesDecoderChannel {
 
 
 	protected class InnerQRStreamCallback extends QRStreamCallback {
-		
+
 		@Override
 		public void onQRCaptured(QRCapturedEvent event) {
 			if (event.qrResults != null) {
@@ -114,14 +108,14 @@ public class QRCodesDecoderChannel {
 			    	handleFragmentHeaderAndData(headerAndData);
 				}
 			}
-			
+
 	    	fireDecoderChannelEvent(event);
 		}
-		
+
 	}
-	
-	
-	
+
+
+
     // TODO synchronized ??!!!!!!
     protected synchronized void handleFragmentHeaderAndData(String headerAndData) {
     	// long nanosBefore = System.nanoTime();
@@ -143,24 +137,20 @@ public class QRCodesDecoderChannel {
     	String header = headerAndData.substring(0, lineSep);
     	byte[] dataBytes = Arrays.copyOfRange(allBytes, lineSep+1, allBytes.length);
 
-    	// header shape: "<id1> [<id2>] [<id3>] <code> <len> <crc32>" -- code is the count of leading ids
+    	// header shape: "<fragmentNumber> <len> <crc32>"
     	String[] tokens = header.trim().split("\\s+");
-    	int[] ids;
+    	int fragmentNumber;
     	int len;
     	long crc32;
     	try {
-    		int code = Integer.parseInt(tokens[tokens.length - 3]);
-    		if (code < 1 || tokens.length != code + 3) {
+    		if (tokens.length != 3) {
     			currDecodeMsg = "header not recognised: " + header;
     			bucketStats.incrCountQRPacketProtocolError();
     			return;
     		}
-    		ids = new int[code];
-    		for (int i = 0; i < code; i++) {
-    			ids[i] = Integer.parseInt(tokens[i]);
-    		}
-    		len = Integer.parseInt(tokens[tokens.length - 2]);
-    		crc32 = Long.parseLong(tokens[tokens.length - 1]);
+    		fragmentNumber = Integer.parseInt(tokens[0]);
+    		len = Integer.parseInt(tokens[1]);
+    		crc32 = Long.parseLong(tokens[2]);
     	} catch (NumberFormatException ex) {
     		currDecodeMsg = "header not recognised: " + header;
     		bucketStats.incrCountQRPacketProtocolError();
@@ -168,111 +158,94 @@ public class QRCodesDecoderChannel {
     	}
 
     	if (dataBytes.length != len) {
-    		currDecodeMsg = "data length mismatch for ids:" + Arrays.toString(ids) + " expected:" + len + " got:" + dataBytes.length;
+    		currDecodeMsg = "data length mismatch for fragment:" + fragmentNumber + " expected:" + len + " got:" + dataBytes.length;
     		bucketStats.incrCountQRPacketProtocolError();
     		return;
     	}
 
     	long checkCrc32 = QRCodecChannelUtils.crc32(dataBytes);
     	if (checkCrc32 != crc32) {
-    		currDecodeMsg = "corrupted data: crc32 differs for fragIds:" + Arrays.toString(ids);
+    		currDecodeMsg = "corrupted data: crc32 differs for fragment:" + fragmentNumber;
     		bucketStats.incrCountQRPacketChecksumException();
     		return;
     	}
 
-    	// ok, got ids + data...
+    	// ok, got fragmentNumber + data...
 
-    	if (ids.length == 1) {
-    		int id = ids[0];
-    		if (id < nextSequenceNumber) {
-				// drop already seen/handled fragment .. do nothing!
-				currDecodeMsg = "dropped past fragment (" + id + ")";
-				bucketStats.incrCountQRPacketRecognizedDuplicate();
-				return;
-    		}
-    		acceptDecodedFragment(id, header, dataBytes);
-    		comboCache.onPlainFragmentArrived(id, this::lookupKnownFragmentBytes, this::acceptRecoveredFragment);
-    		comboCache.cleanupConsumed(nextSequenceNumber);
-    	} else {
-    		boolean allPast = Arrays.stream(ids).allMatch(id -> id < nextSequenceNumber);
-    		if (allPast) {
-    			// every id in this combo already consumed -- useless
-    			currDecodeMsg = "dropped past combo (ids:" + Arrays.toString(ids) + ")";
-    			bucketStats.incrCountQRPacketRecognizedDuplicate();
-    			return;
-    		}
-    		ComboPacket combo = new ComboPacket(ids, len, dataBytes);
-    		boolean inserted = comboCache.insertCombo(combo, this::lookupKnownFragmentBytes, this::acceptRecoveredFragment);
-    		if (inserted) {
-    			currDecodeMsg = "pushed combo (ids:" + Arrays.toString(ids) + ")";
-    		} else {
-    			currDecodeMsg = "dropped already pushed combo (ids:" + Arrays.toString(ids) + ")";
-    			bucketStats.incrCountQRPacketRecognizedDuplicate();
-    		}
-    		comboCache.cleanupConsumed(nextSequenceNumber);
+    	if (fragmentNumber == 0) {
+    		handleParamsFragment(dataBytes, bucketStats);
+    		return;
+    	}
+
+    	if (dataDecoder == null) {
+    		currDecodeMsg = "dropped fragment(" + fragmentNumber + "), FEC params not yet received";
+    		bucketStats.incrCountQRPacketProtocolError();
+    		return;
+    	}
+    	if (dataDecoded) {
+    		currDecodeMsg = "dropped fragment(" + fragmentNumber + "), already fully decoded";
+    		bucketStats.incrCountQRPacketRecognizedDuplicate();
+    		return;
+    	}
+
+    	Parsed<EncodingPacket> parsed = dataDecoder.parsePacket(dataBytes, true);
+    	if (!parsed.isValid()) {
+    		currDecodeMsg = "unparsable RaptorQ packet for fragment(" + fragmentNumber + "): " + parsed.failureReason();
+    		bucketStats.incrCountQRPacketProtocolError();
+    		return;
+    	}
+    	EncodingPacket packet = parsed.value();
+
+    	boolean alreadyKnown = packet.symbolType() == net.fec.openrq.SymbolType.SOURCE
+    			? sourceBlockDecoder.containsSourceSymbol(packet.encodingSymbolID())
+    			: sourceBlockDecoder.containsRepairSymbol(packet.encodingSymbolID());
+    	if (alreadyKnown) {
+    		currDecodeMsg = "dropped already known fragment(" + fragmentNumber + ")";
+    		bucketStats.incrCountQRPacketRecognizedDuplicate();
+    		return;
+    	}
+
+    	SourceBlockState state = sourceBlockDecoder.putEncodingPacket(packet);
+    	currDecodeMsg = "OK recognised fragment (" + fragmentNumber + "), missing source symbols:" + sourceBlockDecoder.missingSourceSymbols().size();
+
+    	if (state == SourceBlockState.DECODED && !dataDecoded) {
+    		dataDecoded = true;
+    		readyBytes = dataDecoder.dataArray();
+    		currDecodeMsg = "OK fully decoded (" + readyBytes.length + " bytes)";
     	}
 
     	// long computeNanos = System.nanoTime() - nanosBefore;
     }
 
-    /** feeds a decoded fragment (plain-received or XOR-recovered) into the existing sequential reassembly logic */
-    private void acceptDecodedFragment(int fragSeqNumber, String header, byte[] dataBytes) {
-		if (nextSequenceNumber == fragSeqNumber) {
-			readyBytes.writeBytes(dataBytes);
-			recentlyConsumedFragments.put(fragSeqNumber, dataBytes);
-			currDecodeMsg = "OK recognised fragment (" + fragSeqNumber + ")";
-			nextSequenceNumber++;
-
-			// then check ahead fragments
-			int seqNumberBeforeUsedAheadFrags = nextSequenceNumber;
-			for(;;) {
-				boolean foundNextFrag = false;
-				for(Iterator<QRCodeDecodedFragment> nextFragIter = aheadFragments.values().iterator(); nextFragIter.hasNext(); ) {
-					QRCodeDecodedFragment frag = nextFragIter.next();
-					int nextFragNumber = frag.getFragmentNumber();
-					if (nextFragNumber == nextSequenceNumber) {
-						readyBytes.writeBytes(frag.getData());
-						recentlyConsumedFragments.put(nextFragNumber, frag.getData());
-						nextSequenceNumber++;
-
-						foundNextFrag = true;
-						nextFragIter.remove();
-					}
-				}
-				if (!foundNextFrag) {
-					break;
-				}
-			}
-			if (nextSequenceNumber > seqNumberBeforeUsedAheadFrags) {
-				currDecodeMsg += ", then use ahead frag(s), expecting " + nextSequenceNumber;
-			}
-
-		} else {
-			// push ahead fragment (if not already pushed)
-			if (fragSeqNumber > nextSequenceNumber && aheadFragments.get(fragSeqNumber) == null) {
-				QRCodeDecodedFragment frag = new QRCodeDecodedFragment(this, fragSeqNumber, header, dataBytes);
-				aheadFragments.put(fragSeqNumber, frag);
-				currDecodeMsg = "pushed ahead fragment (" + fragSeqNumber + ")";
-			} else {
-				currDecodeMsg = "dropped already pushed ahead fragment (" + fragSeqNumber + ")";
-			}
-		}
-    }
-
-    /** callback used by ComboPacketCache once it XOR-recovers a missing fragment */
-    private void acceptRecoveredFragment(int fragSeqNumber, byte[] dataBytes) {
-    	String syntheticHeader = fragSeqNumber + " 1 " + dataBytes.length + " " + QRCodecChannelUtils.crc32(dataBytes) + "\n";
-    	acceptDecodedFragment(fragSeqNumber, syntheticHeader, dataBytes);
-    }
-
-    /** lookup used by ComboPacketCache to fetch bytes of a fragment id already known to the decoder (consumed, recently-consumed, or buffered ahead) */
-    private byte[] lookupKnownFragmentBytes(int fragSeqNumber) {
-    	byte[] recent = recentlyConsumedFragments.get(fragSeqNumber);
-    	if (recent != null) {
-    		return recent;
+    /** receives the FEC-params preamble (fragmentNumber 0, dataLength as ASCII text); builds the RaptorQ decoder once */
+    private void handleParamsFragment(byte[] dataBytes, Bucket bucketStats) {
+    	int dataLength;
+    	try {
+    		dataLength = Integer.parseInt(new String(dataBytes, StandardCharsets.US_ASCII).trim());
+    	} catch (NumberFormatException ex) {
+    		currDecodeMsg = "unparsable FEC params fragment";
+    		bucketStats.incrCountQRPacketProtocolError();
+    		return;
     	}
-    	QRCodeDecodedFragment frag = aheadFragments.get(fragSeqNumber);
-    	return frag != null ? frag.getData() : null;
+    	if (paramsDataLength != null && paramsDataLength == dataLength) {
+    		currDecodeMsg = "dropped already known FEC params fragment";
+    		bucketStats.incrCountQRPacketRecognizedDuplicate();
+    		return;
+    	}
+    	paramsDataLength = dataLength;
+    	fecParams = FECParameters.newParameters(dataLength, symbolSizeHint, 1);
+    	dataDecoder = OpenRQ.newDecoderWithZeroOverhead(fecParams);
+    	sourceBlockDecoder = dataDecoder.sourceBlock(0);
+    	dataDecoded = false;
+    	readyBytes = new byte[0];
+    	currDecodeMsg = "OK received FEC params (dataLength:" + dataLength + ")";
+    }
+
+    /** symbol size used to derive FECParameters from the params fragment's dataLength; must match the encoder's QREncodeSetting.symbolSize */
+    private int symbolSizeHint = 1200;
+
+    public void setSymbolSizeHint(int symbolSize) {
+    	this.symbolSizeHint = symbolSize;
     }
 
     protected void fireDecoderChannelEvent(QRCapturedEvent event) {
@@ -284,49 +257,31 @@ public class QRCodesDecoderChannel {
 
     // ------------------------------------------------------------------------
 
+	/** next expected source symbol ESI (0-based) before full decode, or numberOfSourceSymbols once fully decoded; 0 if FEC params not yet received */
 	public int getNextSequenceNumber() {
-		return nextSequenceNumber;
+		if (sourceBlockDecoder == null) {
+			return 0;
+		}
+		return sourceBlockDecoder.numberOfSourceSymbols() - sourceBlockDecoder.missingSourceSymbols().size();
 	}
 
 	public String getReadyText() {
-		return readyBytes.toString(StandardCharsets.UTF_8);
+		return new String(readyBytes, StandardCharsets.UTF_8);
 	}
 
 	public byte[] getReadyBytes() {
-		return readyBytes.toByteArray();
+		return readyBytes;
 	}
 
 	public String getAheadFragsInfo() {
-		StringBuilder res = new StringBuilder();
-		if (!aheadFragments.isEmpty()) {
-			int minAhead = Integer.MAX_VALUE;
-			int maxAhead = -1;
-			for(QRCodeDecodedFragment frag : aheadFragments.values()) {
-				int fragNum = frag.getFragmentNumber();
-				minAhead = Math.min(fragNum, minAhead);
-				maxAhead = Math.max(fragNum, maxAhead);
-			}
-			res.append((aheadFragments.size() + nextSequenceNumber-1)
-					+ " = " + (nextSequenceNumber-1) + " + " + aheadFragments.size() + " ahead frag(s) in " + minAhead + ".." + maxAhead + " : ");
-			int prev = minAhead;
-			for(int i = minAhead+1; i <= maxAhead; i++) {
-				while(null != aheadFragments.get(i) && i <= maxAhead) {
-					i++;
-				}
-				int last = i-1;
-				if (prev != last) {
-					res.append(prev + "-" + last + " ");
-				} else {
-					res.append(prev + " ");
-				}
-
-				while(null == aheadFragments.get(i) && i <= maxAhead) {
-					i++;
-				}
-				prev = i;				
-			}
+		if (sourceBlockDecoder == null) {
+			return "";
 		}
-		return res.toString();
+		int numSource = sourceBlockDecoder.numberOfSourceSymbols();
+		int missing = sourceBlockDecoder.missingSourceSymbols().size();
+		int repairs = sourceBlockDecoder.availableRepairSymbols().size();
+		return (numSource - missing) + "/" + numSource + " source symbols, " + repairs + " repair symbol(s) received"
+				+ (dataDecoded ? ", DECODED" : "");
 	}
 
 	public void parseRecordParamsText(String recordParamsText) {
@@ -341,7 +296,7 @@ public class QRCodesDecoderChannel {
 		imageStreamProvider.getImageProvider().setRecordArea(r);
 	}
 
-	
+
 	public String getRecognitionStatsText() {
 		return getRollingStats().getRecognitionStatsText();
 	}
@@ -354,27 +309,23 @@ public class QRCodesDecoderChannel {
 		return qrStreamFromImageStream;
 	}
 
-	public int getComboCacheSize() {
-		return comboCache.size();
-	}
-
 	public enum FragmentState { INITIAL, RECEIVED, ACKNOWLEDGED }
 
 	/**
-	 * per-id display state, for ids 1..max(nextSequenceNumber-1, highest known ahead fragment id):
-	 * ACKNOWLEDGED if already consumed into readyBytes (id < nextSequenceNumber), RECEIVED if known
-	 * but not yet sequentially consumed (buffered as an ahead fragment), else INITIAL (never seen).
+	 * per-source-symbol-ESI display state (ESI 0..numberOfSourceSymbols-1): ACKNOWLEDGED if the whole
+	 * source block has been fully decoded, RECEIVED if that source symbol was individually received,
+	 * else INITIAL (not yet seen -- may still be recoverable from repair symbols).
 	 */
 	public List<FragmentState> getFragmentStates() {
-		int maxKnown = nextSequenceNumber - 1;
-		for (int aheadId : aheadFragments.keySet()) {
-			maxKnown = Math.max(maxKnown, aheadId);
+		if (sourceBlockDecoder == null) {
+			return new ArrayList<>();
 		}
-		List<FragmentState> states = new ArrayList<>(maxKnown);
-		for (int id = 1; id <= maxKnown; id++) {
-			if (id < nextSequenceNumber) {
+		int numSource = sourceBlockDecoder.numberOfSourceSymbols();
+		List<FragmentState> states = new ArrayList<>(numSource);
+		for (int esi = 0; esi < numSource; esi++) {
+			if (dataDecoded) {
 				states.add(FragmentState.ACKNOWLEDGED);
-			} else if (aheadFragments.containsKey(id)) {
+			} else if (sourceBlockDecoder.containsSourceSymbol(esi)) {
 				states.add(FragmentState.RECEIVED);
 			} else {
 				states.add(FragmentState.INITIAL);

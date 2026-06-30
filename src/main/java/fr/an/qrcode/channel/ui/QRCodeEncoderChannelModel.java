@@ -171,7 +171,7 @@ public class QRCodeEncoderChannelModel {
     	displayLoopRunning.set(false);
     }
 
-    /** runs the play loop's auto-advance (round-robin pending-id combo schedule from the encoder channel) on the EDT */
+    /** runs the play loop's auto-advance (round-robin source/repair symbol schedule from the encoder channel) on the EDT */
     private boolean sendNextFragmentOnEdt() {
     	AtomicBoolean sent = new AtomicBoolean(false);
 		try {
@@ -181,9 +181,10 @@ public class QRCodeEncoderChannelModel {
 		return sent.get();
     }
 
-    /** pulls the next fragment(s) to send from the encoder channel's round-robin pending-id/combo schedule, increments
-     * their sent counters, and displays them; returns false once fully acknowledged. used only by the "Start" play
-     * loop -- "next"/"prev" buttons instead step currDisplayIndex by groupSize(), cf onDisplayNextFrag/onDisplayPrevFrag. */
+    /** pulls the next fragment(s) to send from the encoder channel's round-robin source/repair symbol schedule,
+     * increments their sent counters, and displays them; returns false once fully acknowledged. used only by the
+     * "Start" play loop -- "next"/"prev" buttons instead step currDisplayIndex by groupSize(), cf
+     * onDisplayNextFrag/onDisplayPrevFrag. */
     private boolean autoAdvanceNextFragmentToSend() {
     	if (encoderChannel == null || encoderChannel.isFullyAcknowledged()) {
     		return false;
@@ -231,7 +232,7 @@ public class QRCodeEncoderChannelModel {
     	return moveDisplayIndexAndResend(n);
     }
 
-    /** sets the display group at fragment index n, incrementing the plain-sent counter of each fragment landed on
+    /** sets the display group at fragment index n, incrementing the sent counter of each fragment landed on
      * (so the squares-strip color reflects "displayed" regardless of whether the move came from next/prev/start) */
     private boolean moveDisplayIndexAndResend(int n) {
     	int clamped = Math.max(1, Math.min(n, fragmentImgs.size()));
@@ -239,7 +240,7 @@ public class QRCodeEncoderChannelModel {
     	for (int i = clamped; i < clamped + groupSize() && i <= fragmentImgs.size(); i++) {
     		FragmentImg frag = fragmentImgs.get(i);
     		if (frag != null) {
-    			frag.incrSentPlainCount();
+    			frag.incrSentCount();
     			group.add(frag);
     		}
     	}

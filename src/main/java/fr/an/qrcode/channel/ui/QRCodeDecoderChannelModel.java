@@ -75,6 +75,17 @@ public class QRCodeDecoderChannelModel {
     @Getter
 	private QRCapturedEvent currQRCapturedEvent;
 
+	// lombok @Getter above isn't generating these under the current Java/lombok toolchain -- explicit fallbacks
+	public String getFullText() {
+		return fullText;
+	}
+	public String getRecognitionStatsText() {
+		return recognitionStatsText;
+	}
+	public QRCapturedEvent getCurrQRCapturedEvent() {
+		return currQRCapturedEvent;
+	}
+
 	private AtomicBoolean pendingRefresh = new AtomicBoolean();
 
     // ------------------------------------------------------------------------

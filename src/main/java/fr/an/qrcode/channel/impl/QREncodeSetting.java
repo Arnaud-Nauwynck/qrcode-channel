@@ -6,6 +6,7 @@ import java.util.Map;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
+import com.google.zxing.qrcode.decoder.Version;
 
 public class QREncodeSetting {
 
@@ -33,18 +34,18 @@ public class QREncodeSetting {
     private int qrCodeW = 17 + 4*qrVersion; // cf com.google.zxing.qrcode.decoder.Version.getDimensionForVersion()
     private int qrCodeH = qrCodeW;
 
-    // FEC-like redundancy: when enabled, QRCodesEncoderChannel.nextFragmentToSend cycles through this sequence
-    // of group sizes, XORing that many still-pending fragments together instead of always sending one plain
-    // fragment -- so the decoder can recover a fragment from a combo once all-but-one of its members are known.
-    private boolean comboRedundancyEnabled = false;
-    private int[] comboGroupSizes = new int[] { 1, 2, 3 };
+    // RaptorQ (RFC 6330, OpenRQ) FEC redundancy: QRCodesEncoderChannel.appendFragmentsFor splits the payload
+    // into source symbols of this size (one per plain QR fragment), and QRCodesEncoderChannel.nextFragmentToSend
+    // sends all source symbols once, then cycles repair symbols indefinitely -- the decoder can reconstruct
+    // the whole source block from any sufficiently large subset of source+repair symbols, in any order.
+    // defaults to (QR code byte capacity - header overhead), cf computeDefaultSymbolSize().
+    private int symbolSize;
 
-    // alternate combo strategy: instead of cycling comboGroupSizes, insert a xor2 combo every xor2Frequency
-    // displays, and a xor3 combo every xor3Frequency displays (xor3 takes priority when both would trigger).
-    private boolean comboFrequencyEnabled = false;
-    private int xor2Frequency = 5;
-    private int xor3Frequency = 10;
+    // number of repair symbols generated and cycled through after the source symbols, for redundancy/retransmission
+    private int numRepairSymbols = 50;
 
+	// header shape: "<fragmentNumber> <len> <crc32>\n" -- worst case ~ "9999999 99999 4294967295\n"
+	private static final int ESTIM_HEADER_LEN = 30;
 
     public QREncodeSetting() {
 		qrHints = new HashMap<>();
@@ -52,9 +53,17 @@ public class QREncodeSetting {
             qrHints.put(EncodeHintType.ERROR_CORRECTION, errorCorrectionLevel);
         }
         qrHints.put(EncodeHintType.QR_VERSION, qrVersion);
-        // payload is wrapped as ISO-8859-1 text to carry arbitrary bytes (incl. XOR combo data) losslessly through ZXing's String API
+        // payload is wrapped as ISO-8859-1 text to carry arbitrary bytes (incl. RaptorQ symbol data) losslessly through ZXing's String API
         qrHints.put(EncodeHintType.CHARACTER_SET, "ISO-8859-1");
+
+        this.symbolSize = computeDefaultSymbolSize();
    	}
+
+    private int computeDefaultSymbolSize() {
+    	Version version = Version.getVersionForNumber(qrVersion);
+    	int bytesCapacity = QRCodeUtils.qrCodeBytesCapacity(version, errorCorrectionLevel);
+    	return Math.max(10, bytesCapacity - ESTIM_HEADER_LEN);
+    }
 
 	public BarcodeFormat getQrCodeFormat() {
 		return qrCodeFormat;
@@ -80,44 +89,20 @@ public class QREncodeSetting {
 		return qrCodeH;
 	}
 
-	public boolean isComboRedundancyEnabled() {
-		return comboRedundancyEnabled;
+	public int getSymbolSize() {
+		return symbolSize;
 	}
 
-	public void setComboRedundancyEnabled(boolean p) {
-		this.comboRedundancyEnabled = p;
+	public void setSymbolSize(int p) {
+		this.symbolSize = p;
 	}
 
-	public int[] getComboGroupSizes() {
-		return comboGroupSizes;
+	public int getNumRepairSymbols() {
+		return numRepairSymbols;
 	}
 
-	public void setComboGroupSizes(int[] p) {
-		this.comboGroupSizes = p;
-	}
-
-	public boolean isComboFrequencyEnabled() {
-		return comboFrequencyEnabled;
-	}
-
-	public void setComboFrequencyEnabled(boolean p) {
-		this.comboFrequencyEnabled = p;
-	}
-
-	public int getXor2Frequency() {
-		return xor2Frequency;
-	}
-
-	public void setXor2Frequency(int p) {
-		this.xor2Frequency = p;
-	}
-
-	public int getXor3Frequency() {
-		return xor3Frequency;
-	}
-
-	public void setXor3Frequency(int p) {
-		this.xor3Frequency = p;
+	public void setNumRepairSymbols(int p) {
+		this.numRepairSymbols = p;
 	}
 
 }

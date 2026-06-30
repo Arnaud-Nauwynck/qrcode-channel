@@ -1,7 +1,6 @@
 package fr.an.qrcode.channel.impl.decode;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.awt.image.BufferedImage;
 import java.util.HashMap;
@@ -27,61 +26,49 @@ import fr.an.qrcode.channel.impl.encode.QRCodesEncoderChannel;
 import fr.an.qrcode.channel.impl.util.DimInt2D;
 
 /**
- * full pipeline smoke test: real QR images rendered by the encoder, decoded back via ZXing,
- * with one plain fragment intentionally dropped to exercise the actual combo XOR recovery path.
+ * full pipeline smoke test: real QR images rendered by the encoder, decoded back via ZXing, with some
+ * source symbols intentionally dropped to exercise RaptorQ's actual repair-symbol recovery path.
  */
 public class EncodeDecodeWithComboRecoveryE2ETest {
 
 	@Test
-	public void testFullPipeline_recoversDroppedFragmentViaCombo() throws Exception {
+	public void testFullPipeline_recoversDroppedSourceSymbolsViaRepairSymbols() throws Exception {
 		String originalText = buildRepeatingText(3000);
 
 		QREncodeSetting encodeSettings = new QREncodeSetting();
-		encodeSettings.setComboRedundancyEnabled(true);
-		encodeSettings.setComboGroupSizes(new int[] { 1, 2 }); // alternate plain sends (to bootstrap the decoder) with 2-way combos
+		encodeSettings.setNumRepairSymbols(30);
 
 		QRCodesEncoderChannel encoder = new QRCodesEncoderChannel(encodeSettings);
 		encoder.appendFragmentsFor(originalText);
-
-		int totalPlainCount = encoder.getFragmentImgs().size();
-		int droppedFragmentNumber = totalPlainCount / 2;
 
 		Map<DecodeHintType, Object> decodeHints = new HashMap<>();
 		decodeHints.put(DecodeHintType.CHARACTER_SET, "ISO-8859-1");
 		QRCodeReader reader = new QRCodeReader();
 
 		QRCodesDecoderChannel decoder = new QRCodesDecoderChannel(decodeHints, new NoopImageProvider(), e -> {});
+		decoder.setSymbolSizeHint(encodeSettings.getSymbolSize());
 
-		// every pending plain fragment id needs to be covered by at least one combo it's part of; cycling
-		// through several full round-robin passes is enough for every id to be sent plain or anchor a combo
-		int maxSends = totalPlainCount * 4;
-		for (int i = 0; i < maxSends && !encoder.isFullyAcknowledged(); i++) {
+		int totalFragments = encoder.getFragmentImgs().size();
+
+		// drop every 4th source symbol (never the params preamble, fragment 0) to simulate QR codes
+		// the camera failed to capture; repair symbols sent afterwards should make up for the loss
+		int maxSends = totalFragments + encodeSettings.getNumRepairSymbols();
+		for (int i = 0; i < maxSends && !decoder.getReadyText().equals(originalText); i++) {
 			QRCodeEncodedFragment frag = encoder.nextFragmentToSend();
 			if (frag == null) {
 				break;
 			}
 
-			boolean containsDroppedFragment = false;
-			for (int id : frag.getIds()) {
-				if (id == droppedFragmentNumber) {
-					containsDroppedFragment = true;
-				}
-			}
-			boolean isPlainDroppedFragment = frag.isPlain() && containsDroppedFragment;
-			if (isPlainDroppedFragment) {
+			boolean dropThisOne = frag.getFragmentNumber() > 0 && (frag.getFragmentNumber() % 4 == 0) && i < totalFragments;
+			if (dropThisOne) {
 				continue; // simulate this one QR code never being captured by the camera
 			}
 
 			String headerAndData = decodeImageToText(reader, frag.getImg(), decodeHints);
 			decoder.handleFragmentHeaderAndData(headerAndData);
-
-			// the human-in-the-loop ack channel reports back fragments the decoder has fully reassembled
-			encoder.acknowledgeUpTo(decoder.getNextSequenceNumber());
 		}
 
 		assertEquals(originalText, decoder.getReadyText());
-		assertEquals(totalPlainCount + 1, decoder.getNextSequenceNumber());
-		assertTrue(encoder.isFullyAcknowledged());
 	}
 
 	private String decodeImageToText(QRCodeReader reader, BufferedImage img, Map<DecodeHintType, Object> hints)

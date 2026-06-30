@@ -27,19 +27,13 @@ public class FragmentImg {
 		this.img = null;
 	}
 
-	/** marks this fragment as (re-)displayed alone, incrementing its plain-sent counter */
-	public void incrSentPlainCount() {
-		owner.incrSentCount(1);
+	/** marks this fragment as (re-)displayed, incrementing its sent counter */
+	public void incrSentCount() {
+		owner.incrSentCount();
 	}
 
-	public int getSentPlainCount() {
-		return owner.getSentPlainCount();
-	}
-	public int getSentXor2Count() {
-		return owner.getSentXor2Count();
-	}
-	public int getSentXor3Count() {
-		return owner.getSentXor3Count();
+	public int getSentCount() {
+		return owner.getSentCount();
 	}
 
 

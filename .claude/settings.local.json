@@ -39,7 +39,23 @@
       "Skill(code-review)",
       "Bash(git add *)",
       "Bash(git reset *)",
-      "Bash(awk '/^commit /{c=$2} /fragmentHeaderPattern = Pattern.compile\\\\\\(\"\\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\)\"\\\\\\)/{print c}')"
+      "Bash(awk '/^commit /{c=$2} /fragmentHeaderPattern = Pattern.compile\\\\\\(\"\\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\) \\\\\\(\\\\[0-9\\\\]\\\\+\\\\\\)\"\\\\\\)/{print c}')",
+      "WebSearch",
+      "Bash(curl *)",
+      "Read(//c/tmp/**)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.ArrayDataDecoder)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.decoder.SourceBlockState)",
+      "Bash(rm -f src/main/java/fr/an/qrcode/channel/impl/util/ByteArrayXorUtils.java)",
+      "Bash(rm -f src/test/java/fr/an/qrcode/channel/impl/util/ByteArrayXorUtilsTest.java)",
+      "Bash(rm -f src/main/java/fr/an/qrcode/channel/impl/encode/NextFragmentIdsChoiceStrategy.java)",
+      "Bash(rm -f src/test/java/fr/an/qrcode/channel/impl/encode/NextFragmentIdsChoiceStrategyTest.java)",
+      "Bash(rm -f src/main/java/fr/an/qrcode/channel/impl/encode/ComboCode.java)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.SymbolType)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.ArraySourceBlockEncoder)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.Parsed)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.ArrayDataEncoder)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.ArraySourceBlockDecoder)",
+      "Bash(javap -p -classpath openrq.jar net.fec.openrq.SBDInfo)"
     ]
   }
 }

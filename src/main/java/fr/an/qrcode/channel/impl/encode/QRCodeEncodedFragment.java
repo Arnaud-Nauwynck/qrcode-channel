@@ -5,14 +5,20 @@ import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
+import net.fec.openrq.EncodingPacket;
+
 import fr.an.qrcode.channel.impl.QRCodecChannelUtils;
 
+/** one transmitted QR fragment: either the leading FEC-params preamble, or a RaptorQ source/repair EncodingPacket */
 public class QRCodeEncodedFragment {
 
 	private QRCodesEncoderChannel owner;
 
-	/** ascending ids of the plain fragment(s) XORed together; a single entry means a plain (non-combo) fragment */
-	private final int[] ids;
+	/** display/navigation position: 0 for the FEC-params preamble, then 1..K for source symbols, K+1.. for repair symbols */
+	private final int fragmentNumber;
+
+	/** null for the FEC-params preamble fragment */
+	private final EncodingPacket packet;
 
     private final byte[] data;
     private final long crc32;
@@ -20,34 +26,28 @@ public class QRCodeEncodedFragment {
     private WeakReference<BufferedImage> imgRef;
     private boolean acknowledge;
 
-    /** counts how many times this id was displayed alone, in a 2-way xor combo, or in a 3-way xor combo */
-    private int sentPlainCount;
-    private int sentXor2Count;
-    private int sentXor3Count;
+    /** counts how many times this fragment was displayed/sent */
+    private int sentCount;
 
-    public QRCodeEncodedFragment(QRCodesEncoderChannel owner, int[] ids, byte[] data) {
+    public QRCodeEncodedFragment(QRCodesEncoderChannel owner, int fragmentNumber, EncodingPacket packet, byte[] data) {
         this.owner = owner;
-        this.ids = ids;
+        this.fragmentNumber = fragmentNumber;
+        this.packet = packet;
     	this.data = data;
     	this.crc32 = QRCodecChannelUtils.crc32(data);
     }
 
-    public int[] getIds() {
-    	return ids;
+    public boolean isParamsFragment() {
+    	return packet == null;
     }
 
-    public boolean isPlain() {
-    	return ids.length == 1;
+    public EncodingPacket getPacket() {
+    	return packet;
     }
 
-    /** lowest id in the group; used for display/navigation position */
+    /** position in the display/navigation strip; used for UI indexing (not a RaptorQ concept by itself) */
     public int getFragmentNumber() {
-		return ids[0];
-	}
-
-	/** number of fragment ids XORed together (1 = plain fragment) */
-	public int getCode() {
-		return ids.length;
+		return fragmentNumber;
 	}
 
 	public long getCrc32() {
@@ -55,12 +55,7 @@ public class QRCodeEncodedFragment {
 	}
 
 	public String getHeader() {
-    	StringBuilder sb = new StringBuilder();
-    	for (int id : ids) {
-    		sb.append(id).append(' ');
-    	}
-    	sb.append(ids.length).append(' ').append(data.length).append(' ').append(crc32).append('\n');
-        return sb.toString();
+    	return fragmentNumber + " " + data.length + " " + crc32 + "\n";
     }
 
 	public byte[] getData() {
@@ -96,25 +91,13 @@ public class QRCodeEncodedFragment {
 		return this.acknowledge;
 	}
 
-	/** records that this id was just sent as part of a group of the given size (1=plain, 2=xor2, 3=xor3) */
-	public void incrSentCount(int groupSize) {
-		if (groupSize <= 1) {
-			sentPlainCount++;
-		} else if (groupSize == 2) {
-			sentXor2Count++;
-		} else {
-			sentXor3Count++;
-		}
+	/** records that this fragment was just sent */
+	public void incrSentCount() {
+		sentCount++;
 	}
 
-	public int getSentPlainCount() {
-		return sentPlainCount;
-	}
-	public int getSentXor2Count() {
-		return sentXor2Count;
-	}
-	public int getSentXor3Count() {
-		return sentXor3Count;
+	public int getSentCount() {
+		return sentCount;
 	}
 
 }
