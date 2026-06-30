@@ -58,6 +58,7 @@ public class QRCodeEncoderChannelView {
 
     private JPanel playerTabPanel;
     private JToolBar playerToolbar;
+    private JButton resetButton;
     private JPanel playerSidePanel;
     private JPanel qrCodeParamsPanel;
     private JPanel acknowledgePanel;
@@ -91,6 +92,7 @@ public class QRCodeEncoderChannelView {
     // private JTextField qrDetailDuplexMetadataText;
 
     private SquaresStripPanel<FragmentImg> fragmentsStatusPanel;
+    private SquaresStripPanel<FragmentImg> repairFragmentsStatusPanel;
 
     private Calib3dChartPanel calib3dChartPanel;
 
@@ -99,6 +101,8 @@ public class QRCodeEncoderChannelView {
     public QRCodeEncoderChannelView(QRCodeEncoderChannelModel model) {
     	this.model = model;
         initUI();
+        inputTextArea.setText(model.getText());
+        model2view();
         model.addPropertyChangeListener(listener);
     }
 
@@ -153,6 +157,10 @@ public class QRCodeEncoderChannelView {
 
             playerToolbar = new JToolBar();
             playerTabPanel.add(playerToolbar, BorderLayout.NORTH);
+
+            resetButton = new JButton("Reset");
+            resetButton.addActionListener(e -> onResetAction());
+            playerToolbar.add(resetButton);
 
             rgbSplitModeCheckBox = new JCheckBox("3 QRCodes (RGB split)");
             rgbSplitModeCheckBox.setSelected(model.getDisplayMode() == DisplayMode.RGB_SPLIT);
@@ -318,9 +326,19 @@ public class QRCodeEncoderChannelView {
             fragmentsStatusScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
             fragmentsStatusScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
 
+            repairFragmentsStatusPanel = new SquaresStripPanel<>(5, 1, QRCodeEncoderChannelView::colorForEncodedFragment);
+            JScrollPane repairFragmentsStatusScrollPane = new JScrollPane(repairFragmentsStatusPanel);
+            repairFragmentsStatusScrollPane.setPreferredSize(new Dimension(0, 30));
+            repairFragmentsStatusScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+            repairFragmentsStatusScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+
+            JPanel fragmentsStatusStackPanel = new JPanel(new GridLayout(2, 1));
+            fragmentsStatusStackPanel.add(fragmentsStatusScrollPane);
+            fragmentsStatusStackPanel.add(repairFragmentsStatusScrollPane);
+
             JPanel southPanel = new JPanel(new BorderLayout());
             southPanel.add(qrDetailPanel, BorderLayout.NORTH);
-            southPanel.add(fragmentsStatusScrollPane, BorderLayout.SOUTH);
+            southPanel.add(fragmentsStatusStackPanel, BorderLayout.SOUTH);
             playerTabPanel.add(southPanel, BorderLayout.SOUTH);
         }
 
@@ -361,6 +379,14 @@ public class QRCodeEncoderChannelView {
     	inputTextArea.setText(inputTextContent);
     	// inputTextArea.setEditable(false);
     	onComputeQRCodesAction();
+    }
+
+    private void onResetAction() {
+    	model.reset();
+    	inputTextArea.setText("");
+    	inputFilenameField.setText("");
+    	tabbedPane.setSelectedIndex(0);
+    	model2view();
     }
 
     private void onComputeQRCodesAction() {
@@ -405,7 +431,10 @@ public class QRCodeEncoderChannelView {
         	displayedIds.add(displayed.getFragmentNumber());
         }
         fragmentsStatusPanel.setHighlightFn(f -> displayedIds.contains(f.getFragmentNumber()));
-        fragmentsStatusPanel.refresh(model.getFragmentImgsList());
+        fragmentsStatusPanel.refresh(model.getSourceFragmentImgsList());
+
+        repairFragmentsStatusPanel.setHighlightFn(f -> displayedIds.contains(f.getFragmentNumber()));
+        repairFragmentsStatusPanel.refresh(model.getRepairFragmentImgsList());
     }
 
     private void updateDetailTexts(List<FragmentImg> group) {

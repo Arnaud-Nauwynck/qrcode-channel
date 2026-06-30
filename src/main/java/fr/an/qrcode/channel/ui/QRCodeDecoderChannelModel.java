@@ -50,6 +50,8 @@ public class QRCodeDecoderChannelModel {
     DesktopScreenshotImageProvider desktopImageProvider = new DesktopScreenshotImageProvider();
     // OpenCVImageProvider openCVImageProvider; // = new openCVImageProvider();
     WebcamImageProvider webcamImageProvider; // = new WebcamImageProvider();
+    private List<com.github.sarxos.webcam.Webcam> webcams;
+    private com.github.sarxos.webcam.Webcam selectedWebcam;
 
     private String calib3dConfParamsName = "default-calib3d.data";
     OpenCvCalib3dImageProvider calib3dImageProvider;
@@ -57,6 +59,8 @@ public class QRCodeDecoderChannelModel {
     OpenCvCalib3d calib3d;
 
     private Map<DecodeHintType, Object> qrDecoderHints = QRCodeUtils.createDefaultDecoderHints();
+
+    private boolean rgbSplitMode = false;
 
     private QRCodesDecoderChannel decoderChannel;
 
@@ -102,9 +106,20 @@ public class QRCodeDecoderChannelModel {
     		this.decoderChannel.stopListenSnapshots();
     	}
     	this.decoderChannel = new QRCodesDecoderChannel(qrDecoderHints,
-    			getImageProvider(), e -> onDecoderChannelEvent(e));
+    			getImageProvider(), e -> onDecoderChannelEvent(e), rgbSplitMode);
     	this.currentScreenshotImg = null;
     	setFullText("");
+    }
+
+    public boolean isRgbSplitMode() {
+    	return rgbSplitMode;
+    }
+
+    public void setRgbSplitMode(boolean rgbSplitMode) {
+    	if (rgbSplitMode != this.rgbSplitMode) {
+    		this.rgbSplitMode = rgbSplitMode;
+    		reset();
+    	}
     }
 
     public void setUiEventListener(DecoderChannelListener uiEventListener) {
@@ -123,7 +138,13 @@ public class QRCodeDecoderChannelModel {
     	}
     	case WebCam: {
     		if (webcamImageProvider == null) {
-    			webcamImageProvider = WebcamImageProvider.createDefault();
+    			if (webcams == null) {
+    				webcams = WebcamImageProvider.listWebcams();
+    			}
+    			if (selectedWebcam == null) {
+    				selectedWebcam = WebcamImageProvider.chooseDefaultWebcam(webcams);
+    			}
+    			webcamImageProvider = WebcamImageProvider.create(selectedWebcam);
     		}
     		DimInt2D size = webcamImageProvider.getSize();
     		this.calib3d = new OpenCvCalib3d(size.w, size.h);
@@ -139,9 +160,30 @@ public class QRCodeDecoderChannelModel {
     }
 
 	public void setImageProviderMode(ImageProviderMode mode) {
-		if (mode != this.imageProviderMode) { 	
+		if (mode != this.imageProviderMode) {
 			this.imageProviderMode = mode;
 			reset();
+		}
+	}
+
+	public List<com.github.sarxos.webcam.Webcam> getWebcams() {
+		if (webcams == null) {
+			webcams = WebcamImageProvider.listWebcams();
+		}
+		return webcams;
+	}
+
+	public com.github.sarxos.webcam.Webcam getSelectedWebcam() {
+		return selectedWebcam;
+	}
+
+	public void setSelectedWebcam(com.github.sarxos.webcam.Webcam webcam) {
+		if (webcam != this.selectedWebcam) {
+			this.selectedWebcam = webcam;
+			this.webcamImageProvider = null;
+			if (imageProviderMode == ImageProviderMode.WebCam) {
+				reset();
+			}
 		}
 	}
 
@@ -274,6 +316,29 @@ public class QRCodeDecoderChannelModel {
 
 	public List<FragmentState> getFragmentStates() {
 		return decoderChannel.getFragmentStates();
+	}
+
+	public List<FragmentState> getRepairFragmentStates() {
+		return decoderChannel.getRepairFragmentStates();
+	}
+
+	public String getMetadataInfoText() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("imageProviderMode: ").append(imageProviderMode).append("\n");
+		if (imageProviderMode == ImageProviderMode.WebCam && selectedWebcam != null) {
+			sb.append("selectedWebcam: ").append(selectedWebcam.getName()).append("\n");
+		}
+		Rectangle recordArea = decoderChannel.getRecordArea();
+		sb.append("recordArea: ").append(recordArea != null ? recordArea : "<none>").append("\n");
+		sb.append("nextSequenceNumber: ").append(getNextSequenceNumber()).append("\n");
+		sb.append("aheadFragsInfo: ").append(getAheadFragsInfo()).append("\n");
+		sb.append("currDecodeMsg: ").append(currDecodeMsg).append("\n");
+		sb.append("fullText.length: ").append(fullText != null ? fullText.length() : 0).append("\n");
+		sb.append("\n");
+		sb.append(decoderChannel.getMetadataInfoText());
+		sb.append("\n");
+		sb.append("recognitionStats: ").append(recognitionStatsText).append("\n");
+		return sb.toString();
 	}
 
 }

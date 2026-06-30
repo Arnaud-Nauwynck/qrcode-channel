@@ -18,6 +18,15 @@ public class FragmentImg {
 		return owner.getFragmentNumber();
 	}
 
+	/** true for the FEC-params preamble and RaptorQ source symbols; false for repair (redundant) symbols */
+	public boolean isSource() {
+		return owner.isParamsFragment() || owner.getPacket().symbolType() == net.fec.openrq.SymbolType.SOURCE;
+	}
+
+	public boolean isRepair() {
+		return !isSource();
+	}
+
 	public boolean isAcknowledge() {
 		return owner.isAcknowledge();
 	}

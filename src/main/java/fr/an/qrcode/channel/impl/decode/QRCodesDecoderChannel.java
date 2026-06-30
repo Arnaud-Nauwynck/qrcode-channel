@@ -217,35 +217,36 @@ public class QRCodesDecoderChannel {
     	// long computeNanos = System.nanoTime() - nanosBefore;
     }
 
-    /** receives the FEC-params preamble (fragmentNumber 0, dataLength as ASCII text); builds the RaptorQ decoder once */
+    /** receives the FEC-params preamble (fragmentNumber 0, "<dataLength> <symbolSize>" as ASCII text); builds the RaptorQ decoder once */
     private void handleParamsFragment(byte[] dataBytes, Bucket bucketStats) {
     	int dataLength;
+    	int symbolSize;
     	try {
-    		dataLength = Integer.parseInt(new String(dataBytes, StandardCharsets.US_ASCII).trim());
+    		String[] tokens = new String(dataBytes, StandardCharsets.US_ASCII).trim().split("\\s+");
+    		if (tokens.length != 2) {
+    			currDecodeMsg = "unparsable FEC params fragment";
+    			bucketStats.incrCountQRPacketProtocolError();
+    			return;
+    		}
+    		dataLength = Integer.parseInt(tokens[0]);
+    		symbolSize = Integer.parseInt(tokens[1]);
     	} catch (NumberFormatException ex) {
     		currDecodeMsg = "unparsable FEC params fragment";
     		bucketStats.incrCountQRPacketProtocolError();
     		return;
     	}
-    	if (paramsDataLength != null && paramsDataLength == dataLength) {
+    	if (paramsDataLength != null && paramsDataLength == dataLength && fecParams != null && fecParams.symbolSize() == symbolSize) {
     		currDecodeMsg = "dropped already known FEC params fragment";
     		bucketStats.incrCountQRPacketRecognizedDuplicate();
     		return;
     	}
     	paramsDataLength = dataLength;
-    	fecParams = FECParameters.newParameters(dataLength, symbolSizeHint, 1);
+    	fecParams = FECParameters.newParameters(dataLength, symbolSize, 1);
     	dataDecoder = OpenRQ.newDecoderWithZeroOverhead(fecParams);
     	sourceBlockDecoder = dataDecoder.sourceBlock(0);
     	dataDecoded = false;
     	readyBytes = new byte[0];
-    	currDecodeMsg = "OK received FEC params (dataLength:" + dataLength + ")";
-    }
-
-    /** symbol size used to derive FECParameters from the params fragment's dataLength; must match the encoder's QREncodeSetting.symbolSize */
-    private int symbolSizeHint = 1200;
-
-    public void setSymbolSizeHint(int symbolSize) {
-    	this.symbolSizeHint = symbolSize;
+    	currDecodeMsg = "OK received FEC params (dataLength:" + dataLength + ", symbolSize:" + symbolSize + ")";
     }
 
     protected void fireDecoderChannelEvent(QRCapturedEvent event) {
@@ -309,6 +310,33 @@ public class QRCodesDecoderChannel {
 		return qrStreamFromImageStream;
 	}
 
+	/** dump of internal decoder state (FEC params, source block progress) for diagnostics display */
+	public String getMetadataInfoText() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("paramsDataLength: ").append(paramsDataLength).append("\n");
+		if (fecParams != null) {
+			sb.append("symbolSize: ").append(fecParams.symbolSize()).append("\n");
+			sb.append("totalSymbols: ").append(fecParams.totalSymbols()).append("\n");
+			sb.append("dataLength: ").append(fecParams.dataLength()).append("\n");
+		} else {
+			sb.append("fecParams: <not yet received>\n");
+		}
+		if (sourceBlockDecoder != null) {
+			int numSource = sourceBlockDecoder.numberOfSourceSymbols();
+			int missing = sourceBlockDecoder.missingSourceSymbols().size();
+			int repairs = sourceBlockDecoder.availableRepairSymbols().size();
+			sb.append("numberOfSourceSymbols: ").append(numSource).append("\n");
+			sb.append("missingSourceSymbols: ").append(missing).append("\n");
+			sb.append("availableRepairSymbols: ").append(repairs).append("\n");
+		} else {
+			sb.append("sourceBlockDecoder: <not yet created>\n");
+		}
+		sb.append("dataDecoded: ").append(dataDecoded).append("\n");
+		sb.append("readyBytes.length: ").append(readyBytes.length).append("\n");
+		sb.append("currDecodeMsg: ").append(currDecodeMsg).append("\n");
+		return sb.toString();
+	}
+
 	public enum FragmentState { INITIAL, RECEIVED, ACKNOWLEDGED }
 
 	/**
@@ -326,6 +354,33 @@ public class QRCodesDecoderChannel {
 			if (dataDecoded) {
 				states.add(FragmentState.ACKNOWLEDGED);
 			} else if (sourceBlockDecoder.containsSourceSymbol(esi)) {
+				states.add(FragmentState.RECEIVED);
+			} else {
+				states.add(FragmentState.INITIAL);
+			}
+		}
+		return states;
+	}
+
+	/**
+	 * per-repair-symbol-ESI display state, ESI 0..maxSeenRepairEsi (sized to the highest repair ESI seen so
+	 * far, since the decoder has no a-priori count of how many will be sent): ACKNOWLEDGED once the whole
+	 * source block is fully decoded, RECEIVED if that repair symbol was individually received, else INITIAL.
+	 */
+	public List<FragmentState> getRepairFragmentStates() {
+		if (sourceBlockDecoder == null) {
+			return new ArrayList<>();
+		}
+		java.util.Set<Integer> availableRepairEsis = sourceBlockDecoder.availableRepairSymbols();
+		int maxEsi = -1;
+		for (int esi : availableRepairEsis) {
+			maxEsi = Math.max(maxEsi, esi);
+		}
+		List<FragmentState> states = new ArrayList<>(maxEsi + 1);
+		for (int esi = 0; esi <= maxEsi; esi++) {
+			if (dataDecoded) {
+				states.add(FragmentState.ACKNOWLEDGED);
+			} else if (availableRepairEsis.contains(esi)) {
 				states.add(FragmentState.RECEIVED);
 			} else {
 				states.add(FragmentState.INITIAL);

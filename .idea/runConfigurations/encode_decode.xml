@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="encode-decode" type="CompoundRunConfigurationType">
+    <toRun name="QRCodeChannelDecoderApp" type="Application" />
+    <toRun name="QRCodeChannelEncoderApp" type="Application" />
+    <method v="2" />
+  </configuration>
+</component>

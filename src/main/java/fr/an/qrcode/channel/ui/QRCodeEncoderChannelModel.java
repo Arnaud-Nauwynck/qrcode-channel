@@ -76,6 +76,18 @@ public class QRCodeEncoderChannelModel {
 
     // ------------------------------------------------------------------------
 
+    /** stops the play loop and clears all encoded state, as if the app just started */
+    public void reset() {
+    	stopDisplayLoop();
+    	this.encoderChannel = null;
+    	this.fragmentImgs = null;
+    	this.text = null;
+    	this.currDisplayIndex = 0;
+    	this.ackSeqNumber = 0;
+    	setCurrentDisplayGroup(new ArrayList<>());
+    	pcs.firePropertyChange("text", null, text);
+    }
+
     public void computeQRCodes(String textContent) {
     	this.text = textContent;
     	this.encoderChannel = new QRCodesEncoderChannel(encodeSetting);
@@ -365,9 +377,47 @@ public class QRCodeEncoderChannelModel {
 		return currentDisplayImg;
 	}
 
+	/** re-pulls fragmentImgs from the encoder channel: new repair symbols are generated lazily by
+	 * nextFragmentToSend() (cf QRCodesEncoderChannel.growWithRepairSymbolIfBudgetAllows), so the snapshot
+	 * taken at computeQRCodes() time goes stale as soon as any repair symbol is sent for the first time. */
+	private void refreshFragmentImgs() {
+		if (encoderChannel != null) {
+			this.fragmentImgs = encoderChannel.getFragmentImgs();
+		}
+	}
+
 	/** every fragment, in id order, for the fragments status table */
 	public List<FragmentImg> getFragmentImgsList() {
+		refreshFragmentImgs();
 		return fragmentImgs != null ? new ArrayList<>(fragmentImgs.values()) : new ArrayList<>();
+	}
+
+	/** FEC-params preamble + source symbols, in id order, for the fragments status table's first row */
+	public List<FragmentImg> getSourceFragmentImgsList() {
+		refreshFragmentImgs();
+		List<FragmentImg> res = new ArrayList<>();
+		if (fragmentImgs != null) {
+			for (FragmentImg frag : fragmentImgs.values()) {
+				if (frag.isSource()) {
+					res.add(frag);
+				}
+			}
+		}
+		return res;
+	}
+
+	/** repair (redundant ESI) symbols, in id order, for the fragments status table's second row */
+	public List<FragmentImg> getRepairFragmentImgsList() {
+		refreshFragmentImgs();
+		List<FragmentImg> res = new ArrayList<>();
+		if (fragmentImgs != null) {
+			for (FragmentImg frag : fragmentImgs.values()) {
+				if (frag.isRepair()) {
+					res.add(frag);
+				}
+			}
+		}
+		return res;
 	}
 
 	public String getAcknowledgeInfo() {

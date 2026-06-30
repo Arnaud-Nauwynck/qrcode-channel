@@ -34,7 +34,7 @@ public class WebcamImageProvider extends ImageProvider {
 		// Webcam.setDriver(new JavaCvDriver());
 	}
 
-	public static WebcamImageProvider createDefault() {
+	public static List<Webcam> listWebcams() {
 		List<Webcam> webcams;
 		try {
 			webcams = Webcam.getWebcams(10, TimeUnit.SECONDS);
@@ -44,15 +44,23 @@ public class WebcamImageProvider extends ImageProvider {
 		if (webcams == null || webcams.size()==0) {
 			throw new IllegalStateException("No detected webcam");
 		}
+		return webcams;
+	}
+
+	public static WebcamImageProvider createDefault() {
+		List<Webcam> webcams = listWebcams();
 		Webcam webcam = chooseDefaultWebcam(webcams);
-		
+		return create(webcam);
+	}
+
+	public static WebcamImageProvider create(Webcam webcam) {
 		Dimension bestViewSize = bestWebcamViewSize(webcam);
 		Dimension currViewSize = webcam.getViewSize();
 		if (currViewSize == null || ! currViewSize.equals(bestViewSize)) {
 			log.info("changing viewSize:" + currViewSize + " -> " + bestViewSize);
 			webcam.setViewSize(bestViewSize);
 		}
-		
+
 		WebcamDiscoveryService discoveryService = Webcam.getDiscoveryService();
 		if (discoveryService.isRunning()) {
 			discoveryService.stop(); // avoid useless re-discovery loop ???
@@ -75,7 +83,11 @@ public class WebcamImageProvider extends ImageProvider {
 			}
 		}
 		return webcam;
-	}	
+	}
+
+	public Webcam getWebcam() {
+		return webcam;
+	}
 
 	private static Dimension bestWebcamViewSize(Webcam webcam) {
 		Dimension[] viewSizes = webcam.getViewSizes();

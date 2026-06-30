@@ -73,7 +73,7 @@ public class QRCodesEncoderChannel {
 		sourceBlockEncoder = dataEncoder.sourceBlock(0);
 
 		int paramsFragNumber = 0;
-		buildAndStoreParamsFragment(paramsFragNumber, allBytes.length);
+		buildAndStoreParamsFragment(paramsFragNumber, allBytes.length, symbolSize);
 		sendOrder.add(paramsFragNumber);
 
 		int fragNumber = 1;
@@ -89,8 +89,8 @@ public class QRCodesEncoderChannel {
 		LOG.info("splitting " + sourceBlockEncoder.numberOfSourceSymbols() + " source symbol(s) of " + symbolSize + " bytes");
 	}
 
-	private void buildAndStoreParamsFragment(int fragNumber, int dataLength) {
-		byte[] data = String.valueOf(dataLength).getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+	private void buildAndStoreParamsFragment(int fragNumber, int dataLength, int symbolSize) {
+		byte[] data = (dataLength + " " + symbolSize).getBytes(java.nio.charset.StandardCharsets.US_ASCII);
 		QRCodeEncodedFragment frag = new QRCodeEncodedFragment(this, fragNumber, null, data);
 		fragments.put(fragNumber, frag);
 	}

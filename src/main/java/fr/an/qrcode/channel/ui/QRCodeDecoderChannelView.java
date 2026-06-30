@@ -67,9 +67,11 @@ public class QRCodeDecoderChannelView {
     private JRadioButton sourceScreenshotRadioButton;
     private JRadioButton sourceOpenCVRadioButton;
     private JRadioButton sourceWebcamRadioButton;
+    private javax.swing.JCheckBox rgbSplitModeCheckBox;
 
     // for webcam recording
     private JPanel webcamParamsPanel;
+    private javax.swing.JComboBox<com.github.sarxos.webcam.Webcam> webcamComboBox;
 
     // for screenshot recording
     private JPanel screenshotParamsPanel;
@@ -90,6 +92,9 @@ public class QRCodeDecoderChannelView {
     private JPanel detailImageTabPanel;
     private ImageCanvas qrCodeImageCanvas;
 
+    private JPanel metadataTabPanel;
+    private JTextArea metadataTextArea;
+
 
     private JPanel infoPanel;
     private JLabel currentDecodeMessageLabel;
@@ -101,6 +106,7 @@ public class QRCodeDecoderChannelView {
     private JLabel saveFileMessageLabel;
 
     private SquaresStripPanel<FragmentState> fragmentsStatusPanel;
+    private SquaresStripPanel<FragmentState> repairFragmentsStatusPanel;
 
     private Calib3dView calib3dView;
 
@@ -173,6 +179,28 @@ public class QRCodeDecoderChannelView {
             {
             	webcamParamsPanel = new JPanel();
             	recorderToolbar.add(webcamParamsPanel);
+
+            	java.util.List<com.github.sarxos.webcam.Webcam> webcams = model.getWebcams();
+            	webcamComboBox = new javax.swing.JComboBox<>(webcams.toArray(new com.github.sarxos.webcam.Webcam[0]));
+            	webcamComboBox.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            		@Override
+            		public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+            				boolean isSelected, boolean cellHasFocus) {
+            			Component res = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            			if (value instanceof com.github.sarxos.webcam.Webcam) {
+            				setText(((com.github.sarxos.webcam.Webcam) value).getName());
+            			}
+            			return res;
+            		}
+            	});
+            	com.github.sarxos.webcam.Webcam selected = model.getSelectedWebcam();
+            	if (selected == null && !webcams.isEmpty()) {
+            		selected = fr.an.qrcode.channel.impl.decode.input.WebcamImageProvider.chooseDefaultWebcam(webcams);
+            	}
+            	webcamComboBox.setSelectedItem(selected);
+            	webcamComboBox.addActionListener(e ->
+            			model.setSelectedWebcam((com.github.sarxos.webcam.Webcam) webcamComboBox.getSelectedItem()));
+            	webcamParamsPanel.add(webcamComboBox);
             }
             {
             	screenshotParamsPanel = new JPanel();
@@ -182,6 +210,11 @@ public class QRCodeDecoderChannelView {
             revealRecordAreaButton = new JButton("reveal area");
             revealRecordAreaButton.addActionListener(e -> onRevealRecordAreaAction());
             recorderToolbar.add(revealRecordAreaButton);
+
+            rgbSplitModeCheckBox = new javax.swing.JCheckBox("3 QRCodes (RGB split)");
+            rgbSplitModeCheckBox.setSelected(model.isRgbSplitMode());
+            rgbSplitModeCheckBox.addActionListener(e -> model.setRgbSplitMode(rgbSplitModeCheckBox.isSelected()));
+            recorderToolbar.add(rgbSplitModeCheckBox);
 
             clearTextButton = new JButton("ClearText");
             recorderToolbar.add(clearTextButton);
@@ -212,13 +245,24 @@ public class QRCodeDecoderChannelView {
             detailImageTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
         }
 
+        { // metadataTabPanel
+            metadataTabPanel = new JPanel(new BorderLayout());
+
+            metadataTextArea = new JTextArea();
+            metadataTextArea.setEditable(false);
+            metadataTextArea.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12));
+            JScrollPane metadataScrollPane = new JScrollPane(metadataTextArea);
+            metadataTabPanel.add(metadataScrollPane, BorderLayout.CENTER);
+        }
+
         calib3dView = new Calib3dView(model.getCalib3dImageProvider());
 
         tabbedPane.add("recorder", recorderTabPanel);
         tabbedPane.add("img", detailImageTabPanel);
+        tabbedPane.add("metadata", metadataTabPanel);
         tabbedPane.add("calib3d", calib3dView.getComp());
 
-        infoPanel = new JPanel(new GridLayout(7, 1));
+        infoPanel = new JPanel(new GridLayout(8, 1));
         {
 	        currentDecodeMessageLabel = new JLabel();
 	        infoPanel.add(currentDecodeMessageLabel);
@@ -240,6 +284,12 @@ public class QRCodeDecoderChannelView {
 	        fragmentsStatusScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 	        fragmentsStatusScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
 	        infoPanel.add(fragmentsStatusScrollPane);
+
+	        repairFragmentsStatusPanel = new SquaresStripPanel<>(5, 1, QRCodeDecoderChannelView::colorForFragmentState);
+	        JScrollPane repairFragmentsStatusScrollPane = new JScrollPane(repairFragmentsStatusPanel);
+	        repairFragmentsStatusScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+	        repairFragmentsStatusScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+	        infoPanel.add(repairFragmentsStatusScrollPane);
 
 	        saveFileMessageLabel = new JLabel();
 	        infoPanel.add(saveFileMessageLabel);
@@ -369,6 +419,9 @@ public class QRCodeDecoderChannelView {
         recognitionStatsText.setText(model.getRecognitionStatsText());
 
         fragmentsStatusPanel.refresh(model.getFragmentStates());
+        repairFragmentsStatusPanel.refresh(model.getRepairFragmentStates());
+
+        metadataTextArea.setText(model.getMetadataInfoText());
 
         drawCurrCanvas();
 
