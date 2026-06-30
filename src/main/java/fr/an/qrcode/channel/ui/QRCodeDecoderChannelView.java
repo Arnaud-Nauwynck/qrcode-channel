@@ -91,6 +91,9 @@ public class QRCodeDecoderChannelView {
 
     private JPanel detailImageTabPanel;
     private ImageCanvas qrCodeImageCanvas;
+    private ImageCanvas qrCodeRedCanvas;
+    private ImageCanvas qrCodeGreenCanvas;
+    private ImageCanvas qrCodeBlueCanvas;
 
     private JPanel metadataTabPanel;
     private JTextArea metadataTextArea;
@@ -213,7 +216,10 @@ public class QRCodeDecoderChannelView {
 
             rgbSplitModeCheckBox = new javax.swing.JCheckBox("3 QRCodes (RGB split)");
             rgbSplitModeCheckBox.setSelected(model.isRgbSplitMode());
-            rgbSplitModeCheckBox.addActionListener(e -> model.setRgbSplitMode(rgbSplitModeCheckBox.isSelected()));
+            rgbSplitModeCheckBox.addActionListener(e -> {
+                model.setRgbSplitMode(rgbSplitModeCheckBox.isSelected());
+                updateDetailImageLayout();
+            });
             recorderToolbar.add(rgbSplitModeCheckBox);
 
             clearTextButton = new JButton("ClearText");
@@ -242,7 +248,15 @@ public class QRCodeDecoderChannelView {
 
             qrCodeImageCanvas = new ImageCanvas();
             qrCodeImageCanvas.setPreferredSize(new Dimension(250, 250));
-            detailImageTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
+
+            qrCodeRedCanvas = new ImageCanvas();
+            qrCodeRedCanvas.setPreferredSize(new Dimension(250, 250));
+            qrCodeGreenCanvas = new ImageCanvas();
+            qrCodeGreenCanvas.setPreferredSize(new Dimension(250, 250));
+            qrCodeBlueCanvas = new ImageCanvas();
+            qrCodeBlueCanvas.setPreferredSize(new Dimension(250, 250));
+
+            updateDetailImageLayout();
         }
 
         { // metadataTabPanel
@@ -455,11 +469,59 @@ public class QRCodeDecoderChannelView {
         // saveFileMessageLabel.setText();
     }
 
+    private void updateDetailImageLayout() {
+        boolean rgb = model.isRgbSplitMode();
+        detailImageTabPanel.removeAll();
+        if (rgb) {
+            JPanel rgbPanel = new JPanel(new GridLayout(1, 3));
+            JPanel redPanel = new JPanel(new BorderLayout());
+            redPanel.add(new JLabel("Red", JLabel.CENTER), BorderLayout.NORTH);
+            redPanel.add(qrCodeRedCanvas, BorderLayout.CENTER);
+            JPanel greenPanel = new JPanel(new BorderLayout());
+            greenPanel.add(new JLabel("Green", JLabel.CENTER), BorderLayout.NORTH);
+            greenPanel.add(qrCodeGreenCanvas, BorderLayout.CENTER);
+            JPanel bluePanel = new JPanel(new BorderLayout());
+            bluePanel.add(new JLabel("Blue", JLabel.CENTER), BorderLayout.NORTH);
+            bluePanel.add(qrCodeBlueCanvas, BorderLayout.CENTER);
+            rgbPanel.add(redPanel);
+            rgbPanel.add(greenPanel);
+            rgbPanel.add(bluePanel);
+            detailImageTabPanel.add(rgbPanel, BorderLayout.CENTER);
+        } else {
+            detailImageTabPanel.add(qrCodeImageCanvas, BorderLayout.CENTER);
+        }
+        detailImageTabPanel.revalidate();
+        detailImageTabPanel.repaint();
+    }
+
     protected void drawCurrCanvas() {
     	BufferedImage image = model.getCurrentScreenshotImg();
-        qrCodeImageCanvas.setImage(image);
+    	if (model.isRgbSplitMode()) {
+    	    qrCodeRedCanvas.setImage(extractChannel(image, 0));
+    	    qrCodeGreenCanvas.setImage(extractChannel(image, 1));
+    	    qrCodeBlueCanvas.setImage(extractChannel(image, 2));
+    	    qrCodeRedCanvas.repaint();
+    	    qrCodeGreenCanvas.repaint();
+    	    qrCodeBlueCanvas.repaint();
+    	} else {
+    	    qrCodeImageCanvas.setImage(image);
+    	    qrCodeImageCanvas.repaint();
+    	}
+    }
 
-        qrCodeImageCanvas.repaint();
+    /** extracts one color channel (0=R, 1=G, 2=B) from a color image and returns it as a grayscale BufferedImage */
+    private static BufferedImage extractChannel(BufferedImage src, int channel) {
+        if (src == null) return null;
+        int w = src.getWidth(), h = src.getHeight();
+        BufferedImage dst = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
+        int shift = (2 - channel) * 8; // R=16, G=8, B=0
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int v = (src.getRGB(x, y) >> shift) & 0xFF;
+                dst.getRaster().setSample(x, y, 0, v);
+            }
+        }
+        return dst;
     }
 
     /** white/pale=initial (never seen), green=received (known, not yet sequential), grey=acknowledged (consumed) */
