@@ -278,7 +278,7 @@ public class QRCodeDecoderChannelView {
 
         calib3dView = new Calib3dView(model.getCalib3dImageProvider());
 
-        tabbedPane.add("recorder", recorderTabPanel);
+        tabbedPane.add("output", recorderTabPanel);
         tabbedPane.add("img", detailImageTabPanel);
         tabbedPane.add("metadata", metadataTabPanel);
         tabbedPane.add("calib3d", calib3dView.getComp());

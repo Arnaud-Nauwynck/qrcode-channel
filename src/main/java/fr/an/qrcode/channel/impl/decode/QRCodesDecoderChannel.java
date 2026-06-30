@@ -51,6 +51,8 @@ public class QRCodesDecoderChannel {
 
     private boolean dataDecoded = false;
     private byte[] readyBytes = new byte[0];
+    /** raw bytes of each received source symbol, indexed by ESI; null slot = not yet received */
+    private byte[][] receivedSourceSymbolBytes;
 
     // emit
 	private DecoderChannelListener eventListener;
@@ -205,6 +207,17 @@ public class QRCodesDecoderChannel {
     		return;
     	}
 
+    	if (packet.symbolType() == net.fec.openrq.SymbolType.SOURCE
+    			&& receivedSourceSymbolBytes != null) {
+    		int esi = packet.encodingSymbolID();
+    		if (esi >= 0 && esi < receivedSourceSymbolBytes.length && receivedSourceSymbolBytes[esi] == null) {
+    			byte[] symData = packet.symbols().array();
+    			int symOff = packet.symbols().arrayOffset();
+    			int symLen = packet.symbols().remaining();
+    			receivedSourceSymbolBytes[esi] = Arrays.copyOfRange(symData, symOff, symOff + symLen);
+    		}
+    	}
+
     	SourceBlockState state = sourceBlockDecoder.putEncodingPacket(packet);
     	currDecodeMsg = "OK recognised fragment (" + fragmentNumber + "), missing source symbols:" + sourceBlockDecoder.missingSourceSymbols().size();
 
@@ -246,13 +259,14 @@ public class QRCodesDecoderChannel {
     	sourceBlockDecoder = dataDecoder.sourceBlock(0);
     	dataDecoded = false;
     	readyBytes = new byte[0];
+    	receivedSourceSymbolBytes = new byte[sourceBlockDecoder.numberOfSourceSymbols()][];
     	currDecodeMsg = "OK received FEC params (dataLength:" + dataLength + ", symbolSize:" + symbolSize + ")";
     }
 
     protected void fireDecoderChannelEvent(QRCapturedEvent event) {
     	eventListener.onEvent(new DecoderChannelEvent(
     			currDecodeMsg,
-    			getReadyText(),
+    			getPartialText(),
     			event));
     }
 
@@ -272,6 +286,38 @@ public class QRCodesDecoderChannel {
 
 	public byte[] getReadyBytes() {
 		return readyBytes;
+	}
+
+	private static final String MISSING_FRAGMENT_PLACEHOLDER = "\n???????????\n";
+
+	/**
+	 * Returns the full text with received source symbols in place and
+	 * {@value #MISSING_FRAGMENT_PLACEHOLDER} for each source symbol not yet received.
+	 * Once fully decoded, returns the complete decoded text.
+	 */
+	public String getPartialText() {
+		if (dataDecoded) {
+			return getReadyText();
+		}
+		if (sourceBlockDecoder == null || fecParams == null || receivedSourceSymbolBytes == null) {
+			return "";
+		}
+		int numSource = receivedSourceSymbolBytes.length;
+		int dataLen = (int) fecParams.dataLength();
+		int symbolSize = fecParams.symbolSize();
+		StringBuilder sb = new StringBuilder(dataLen + numSource * MISSING_FRAGMENT_PLACEHOLDER.length());
+		for (int esi = 0; esi < numSource; esi++) {
+			byte[] symBytes = receivedSourceSymbolBytes[esi];
+			if (symBytes != null) {
+				int start = esi * symbolSize;
+				int end = Math.min(start + symbolSize, dataLen);
+				int usedLen = end - start;
+				sb.append(new String(symBytes, 0, Math.min(usedLen, symBytes.length), StandardCharsets.UTF_8));
+			} else {
+				sb.append(MISSING_FRAGMENT_PLACEHOLDER);
+			}
+		}
+		return sb.toString();
 	}
 
 	public String getAheadFragsInfo() {
